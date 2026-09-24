@@ -2,7 +2,7 @@
 
 Accept bank transfers automatically by reading your bank's **balance-notification emails**, then fire a **webhook** to your system when the transfer description contains an order code. Feature parity with [payhook.codes](https://payhook.codes). Open source, with two ways to use it: **Hosted** (a shared free instance on Cloudflare) and **Self-host** (Docker on your own machine).
 
-> **Status:** in design, no code yet. Research details are in [docs/research.md](docs/research.md).
+> **Status:** P1 (core pipeline), P2 (accounts, dashboard) and P2.5 (self-host) are implemented. Not yet verified end to end on a real Gmail + Cloudflare deployment. Research: [docs/research.md](docs/research.md). Design: [docs/design.md](docs/design.md).
 
 Supported banks: **CAKE by VPBank** and **Timo**.
 
@@ -32,6 +32,77 @@ Bank ──► user's Gmail
 | Email intake | Apps Script in the user's Gmail | IMAP IDLE, the container connects outbound (no public URL needed) |
 | Runtime | Cloudflare Workers + Queues + Cron, Neon Postgres | Docker compose: Bun server + Postgres |
 | Cost | Free, no domain needed (`*.workers.dev`) | Free |
+
+## Getting started
+
+Both modes need two random secrets. Generate each with `openssl rand -base64 32`:
+
+| Variable | Purpose |
+|---|---|
+| `BETTER_AUTH_SECRET` | Signs session cookies |
+| `ENCRYPTION_KEY` | AES-GCM key for webhook secrets, IMAP App Passwords and failed raw emails. **Changing it makes those unreadable.** |
+
+Optional: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (both or neither) to enable "Continue with Google"; the OAuth redirect URI is `<BETTER_AUTH_URL>/api/auth/callback/google`. `ALLOW_SIGNUP=false` closes registration (sign up your own account first: the **first account becomes admin**).
+
+### Self-host (Docker)
+
+```bash
+cp .env.example .env        # fill BETTER_AUTH_SECRET and ENCRYPTION_KEY
+docker compose up -d        # Postgres + app; migrations run on startup
+```
+
+Open http://localhost:3000 and sign up. For a public host, set `BETTER_AUTH_URL` to its URL (for example `https://pay.example.com`) and put the app behind HTTPS.
+
+Two ways to feed emails in:
+- **IMAP (recommended for self-host):** turn on 2-step verification for the Gmail account, create an App Password at https://myaccount.google.com/apppasswords, then add the Gmail with the IMAP option. The container connects out to `imap.gmail.com`, so no public URL is needed.
+- **Apps Script:** needs the app reachable from the internet, because Google's servers post to `/api/ingest`.
+
+Self-host allows webhooks to private addresses (LAN, `http://`) by default: `ALLOW_PRIVATE_WEBHOOKS=true`.
+
+### Hosted (Cloudflare Workers, free tier)
+
+Requirements: a Cloudflare account and a [Neon](https://neon.tech) Postgres database. Commands use `npx wrangler` (Node ≥ 22); with an older Node, run `bun node_modules/wrangler/bin/wrangler.js` instead.
+
+1. **Database.** Create a Neon project and copy its connection string. Apply the migrations:
+   ```bash
+   DATABASE_URL='postgres://…neon.tech/neondb?sslmode=require' bunx drizzle-kit migrate
+   ```
+2. **Log in:** `npx wrangler login`.
+3. **Hyperdrive** (connection pooling in front of Neon):
+   ```bash
+   npx wrangler hyperdrive create paymailhook --connection-string='postgres://…neon.tech/neondb?sslmode=require'
+   ```
+   Put the returned id into `wrangler.jsonc` → `hyperdrive[0].id`.
+4. **Queue** for webhook retries: `npx wrangler queues create paymailhook-deliveries`.
+5. **URL.** In `wrangler.jsonc`, set `vars.BETTER_AUTH_URL` to `https://paymailhook.<your-subdomain>.workers.dev` (your subdomain is shown in the Cloudflare dashboard under Workers).
+6. **Secrets:**
+   ```bash
+   npx wrangler secret put BETTER_AUTH_SECRET
+   npx wrangler secret put ENCRYPTION_KEY
+   # optional: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ALLOW_SIGNUP (as a var)
+   ```
+7. **Deploy:** `bun install && bun run deploy`.
+8. Open the Worker URL, sign up (you become admin), add your Gmail, and paste the generated Apps Script into https://script.google.com with that Gmail account, then run `setup()` once.
+
+The hourly cron re-queues stuck deliveries and deletes old logs; nothing else needs scheduling.
+
+### Development
+
+```bash
+bun install
+cp .env.example .env                    # DATABASE_URL points at a local Postgres
+bun run db:migrate
+bun run dev                             # API on :3000 (PORT to change), with IMAP listeners
+bun run dev:web                         # SPA on :5173, proxies /api to API_URL (default http://localhost:3000)
+bun run check                           # Biome + tsc + bun test (PGlite, no database needed)
+bun run build:worker                    # SPA build + Worker bundle dry run
+```
+
+`scripts/create-config.ts <gmail> <webhookUrl>` creates a config without the dashboard; `scripts/anonymize-fixtures.ts` rebuilds `test/fixtures/` from local real emails.
+
+## Receiving webhooks
+
+Each matched incoming transfer is POSTed to your URL as a [Standard Webhooks](https://www.standardwebhooks.com/) request (`webhook-id`, `webhook-timestamp`, `webhook-signature`), signed with the `whsec_…` secret shown when the config is created. Verify it with an official `standardwebhooks` library, dedupe by `webhook-id`, check both `orderId` and `amount`, and answer 2xx within 10 seconds. Payload and retry schedule: [design §3](docs/design.md#3-webhook-delivery-).
 
 ## Scope (full payhook feature set, split into phases)
 
@@ -69,23 +140,27 @@ Bank ──► user's Gmail
 
 TypeScript · Bun · Hono · Drizzle · Postgres (Neon + Hyperdrive) · better-auth · Cloudflare Workers / Queues / Cron · Google Apps Script · `imapflow` (Self-host) · React · Vite · TanStack Query · shadcn/ui · `mailauth` (DKIM verification over DNS-over-HTTPS) · `postal-mime` · `vietnam-qr-pay` · Biome
 
-## Directory layout (planned)
+## Directory layout
 
 ```
 src/
-  core/          # plain TS, no Cloudflare imports: dkim, parsers/{cake,timo}, match, webhook-sign, services
-    db/          # Drizzle schema (pg-core), driver-agnostic Database type
+  core/          # plain TS, no Cloudflare imports: banks (parsers), dkim, ingest, webhook, maintenance, auth, env
+    db/          # Drizzle schema (pg-core), driver-agnostic Database type, startup migrator
   api/           # Hono app (depends only on core)
+  imap.ts        # Self-host IMAP IDLE listeners
   worker.ts      # Hosted entry: fetch, queue, scheduled
-  server.ts      # Self-host/dev entry: Bun.serve + IMAP listener + retry timers
-apps-script/     # Code.gs for users to paste into Gmail
-web/             # React SPA
+  server.ts      # Self-host/dev entry: Bun server + IMAP + retry timers + SPA
+apps-script/     # Code.gs template users paste into Gmail
+web/             # React SPA (Vite, shadcn/ui)
 migrations/      # drizzle-kit
-test/fixtures/   # anonymized .eml files (original mail-template/ is in .gitignore)
+scripts/         # dev helpers (create-config, anonymize-fixtures)
+test/            # bun test + PGlite; fixtures/ are anonymized bank emails (real ones stay in gitignored mail-template/)
 ```
 
 ## Next steps
 
 - [x] Detailed design: [docs/design.md](docs/design.md) (schema, email intake flow, webhooks, API/auth, testing)
-- [ ] Implementation plan: [docs/plans/2026-09-24-paymailhook.md](docs/plans/2026-09-24-paymailhook.md)
-- [ ] Spike: does Apps Script's `getRawContent()` return raw content identical to "Download original"; measure CPU time on Workers
+- [x] Implementation plan: [docs/plans/2026-09-24-paymailhook.md](docs/plans/2026-09-24-paymailhook.md); deviations and their reasons: [docs/plans/2026-09-24-paymailhook-deviations.md](docs/plans/2026-09-24-paymailhook-deviations.md)
+- [x] P1 core pipeline, P2 accounts and dashboard, P2.5 self-host
+- [ ] Spike on a real deployment: does Apps Script's `getRawContent()` pass DKIM; CPU time per ingest on Workers (10 ms free limit)
+- [ ] P3 dashboard extras, P4 extensions

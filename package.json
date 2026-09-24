@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "build": "vite build",
-    "build:worker": "vite build && bun node_modules/wrangler/bin/wrangler.js deploy --dry-run --outdir dist/worker"
+    "build:worker": "vite build && bun node_modules/wrangler/bin/wrangler.js deploy --dry-run --outdir dist/worker",
+    "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
     "@better-auth/api-key": "^1.7.5",

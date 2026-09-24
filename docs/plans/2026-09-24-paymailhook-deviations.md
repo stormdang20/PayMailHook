@@ -587,3 +587,12 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 2.9-d: manual check (2026-09-24)
 
 - `docker compose -p pmh-selftest up` on port 3011: migrations applied, first sign-up got `role: admin`, `/transactions` served the SPA, process runs as `uid=1000(bun)`. The test stack, its volume and image were removed afterwards.
+
+## Task 2.10: README
+
+### 2.10-a: `bun run deploy` script and scope of the guide
+
+- Added `"deploy": "vite build && wrangler deploy"` so the Hosted guide's deploy step is one command that never ships a stale SPA.
+- The guide recommends **IMAP for Self-host** (outbound connection, works on a LAN box) and explains that Apps Script needs a publicly reachable `/api/ingest`.
+- Neon migrations are applied with `drizzle-kit migrate` against the direct connection string before creating Hyperdrive; the Worker itself never migrates (it has no filesystem).
+- Not yet verified by following it on a real Cloudflare account (part of the user's Task 1.13 spike).
