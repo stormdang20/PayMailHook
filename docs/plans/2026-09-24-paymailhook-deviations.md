@@ -605,3 +605,11 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 
 - As planned: `refetchInterval: 5000` on the transactions query. No extra visibility code: `@tanstack/query-core` only runs interval refetches when `refetchIntervalInBackground` is set or `focusManager.isFocused()` (document not hidden), checked in `queryObserver.ts`. New rows appear within ~5 s plus request time.
 - Kept to the transactions page, as the plan says; the webhook log refreshes on open and after a manual retry.
+
+## Task 3.2: `GET /api/qr`
+
+- `bank` accepts a `vietnam-qr-pay` bank key (`cake`, `timo`, `vcb`…) or its 6-digit BIN, so callers don't need a BIN table; unknown banks answer `400 unknown_bank`.
+- Response: `image/svg+xml`, `cache-control: public, max-age=86400` (same parameters always give the same image), `access-control-allow-origin: *` (design §4.2, embeddable in shop pages). Public (already in `PUBLIC_PATHS`).
+- Validation: account 1–19 alphanumerics, amount a positive integer, description ≤ 50 chars.
+- Test decodes the built payload with `new QRPay(content)` (bank BIN, account, amount, purpose). Scanning with a banking app is a manual check for the user.
+- `qrcode` bundles for Workers (gzip total 1083 KiB).

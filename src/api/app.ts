@@ -9,6 +9,7 @@ import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
 import { deliveryRoutes } from './deliveries';
 import { emailConfigRoutes } from './email-configs';
+import { qrRoutes } from './qr';
 import { transactionRoutes } from './transactions';
 
 export type SessionUser = { id: string; role: string | null };
@@ -56,6 +57,7 @@ export function createApp(makeDeps: (c: Context) => Deps) {
       .route('/api/email-configs', emailConfigRoutes)
       .route('/api/transactions', transactionRoutes)
       .route('/api/webhook-deliveries', deliveryRoutes)
+      .route('/api/qr', qrRoutes)
       .post('/api/ingest', async (c) => {
         const { deps } = c.var;
         const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
