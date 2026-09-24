@@ -37,30 +37,36 @@ export function createApp(makeDeps: (c: Context) => Deps) {
   app.use('/api/*', requireUser);
 
   // Chained so AppType carries every route for the typed `hc<AppType>` client in web/.
-  return app
-    .get('/api/me', async (c) => {
-      const [me] = await c.var.deps.db
-        .select({ id: user.id, email: user.email, name: user.name, role: user.role })
-        .from(user)
-        .where(eq(user.id, c.var.user.id));
-      return c.json(me);
-    })
-    .route('/api/email-configs', emailConfigRoutes)
-    .route('/api/transactions', transactionRoutes)
-    .route('/api/webhook-deliveries', deliveryRoutes)
-    .post('/api/ingest', async (c) => {
-      const { deps } = c.var;
-      const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
-      const [config] = token
-        ? await deps.db
-            .select()
-            .from(emailConfigs)
-            .where(eq(emailConfigs.ingestTokenHash, await sha256Hex(token)))
-        : [];
-      if (!config) return c.json({ error: { code: 'unauthorized' } }, 401);
-      const result = await ingestRawEmail(deps, config, new Uint8Array(await c.req.arrayBuffer()));
-      return c.json({ ok: true, ...result });
-    });
+  return (
+    app
+      // Public: lets the SPA show only sign-in buttons that can work (like react-starter-kit).
+      .get('/api/config', (c) =>
+        c.json({ socialProviders: Object.keys(c.var.deps.auth.options.socialProviders ?? {}) }),
+      )
+      .get('/api/me', async (c) => {
+        const [me] = await c.var.deps.db
+          .select({ id: user.id, email: user.email, name: user.name, role: user.role })
+          .from(user)
+          .where(eq(user.id, c.var.user.id));
+        return c.json(me);
+      })
+      .route('/api/email-configs', emailConfigRoutes)
+      .route('/api/transactions', transactionRoutes)
+      .route('/api/webhook-deliveries', deliveryRoutes)
+      .post('/api/ingest', async (c) => {
+        const { deps } = c.var;
+        const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
+        const [config] = token
+          ? await deps.db
+              .select()
+              .from(emailConfigs)
+              .where(eq(emailConfigs.ingestTokenHash, await sha256Hex(token)))
+          : [];
+        if (!config) return c.json({ error: { code: 'unauthorized' } }, 401);
+        const result = await ingestRawEmail(deps, config, new Uint8Array(await c.req.arrayBuffer()));
+        return c.json({ ok: true, ...result });
+      })
+  );
 }
 
 export type AppType = ReturnType<typeof createApp>;

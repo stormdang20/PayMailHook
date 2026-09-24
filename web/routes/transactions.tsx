@@ -1,0 +1,90 @@
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { api, parseResponse } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { formatTime, formatVnd } from '@/lib/format';
+import { cn } from '@/lib/utils';
+
+type Direction = 'all' | 'in' | 'out';
+
+export function TransactionsPage() {
+  const [direction, setDirection] = useState<Direction>('all');
+  const pages = useInfiniteQuery({
+    queryKey: ['transactions', direction],
+    initialPageParam: '',
+    queryFn: ({ pageParam }) =>
+      parseResponse(
+        api.transactions.$get({
+          query: { ...(pageParam && { cursor: pageParam }), ...(direction !== 'all' && { direction }) },
+        }),
+      ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+  const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="font-semibold text-lg">Giao dịch</h1>
+        <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả</SelectItem>
+            <SelectItem value="in">Tiền vào</SelectItem>
+            <SelectItem value="out">Tiền ra</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {pages.error && <p className="text-destructive text-sm">{errorMessage(pages.error)}</p>}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Thời gian</TableHead>
+            <TableHead>Ngân hàng</TableHead>
+            <TableHead className="text-right">Số tiền</TableHead>
+            <TableHead>Nội dung</TableHead>
+            <TableHead>Mã đơn</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((t) => (
+            <TableRow key={t.id}>
+              <TableCell className="whitespace-nowrap">{formatTime(t.occurredAt)}</TableCell>
+              <TableCell>{t.bank}</TableCell>
+              <TableCell
+                className={cn(
+                  'whitespace-nowrap text-right tabular-nums',
+                  t.direction === 'in' ? 'text-green-600' : 'text-red-600',
+                )}
+              >
+                {t.direction === 'in' ? '+' : '−'}
+                {formatVnd(t.amount)}
+              </TableCell>
+              <TableCell className="max-w-md truncate" title={t.description}>
+                {t.description}
+              </TableCell>
+              <TableCell>{t.orderId ?? '—'}</TableCell>
+            </TableRow>
+          ))}
+          {pages.isSuccess && rows.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
+                Chưa có giao dịch.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      {pages.hasNextPage && (
+        <Button variant="outline" onClick={() => pages.fetchNextPage()} disabled={pages.isFetchingNextPage}>
+          Xem thêm
+        </Button>
+      )}
+    </div>
+  );
+}

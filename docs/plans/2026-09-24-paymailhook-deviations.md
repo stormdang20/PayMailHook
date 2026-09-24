@@ -520,3 +520,21 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 
 - `bun run build` = `vite build`. `build:worker` now runs `vite build` first (wrangler needs the assets directory) and writes the Worker bundle to `dist/worker` so it can't clash with `dist/client`.
 - **Result:** SPA JS 133 KiB gzip; Worker total 1057 KiB gzip.
+
+## Task 2.6: Pages
+
+### 2.6-a: UI text in Vietnamese
+
+- The target users bank with CAKE/Timo and read Vietnamese (like payhook.codes). CLAUDE.md's English rule covers code, comments, commits and docs; UI copy is product content. Messages live next to their components; `web/lib/errors.ts` maps API error codes and `ingest_error` values to sentences. i18n can be added if non-Vietnamese users appear.
+
+### 2.6-b: public `GET /api/config`
+
+- Returns `{ socialProviders }` so the sign-in page shows "Continue with Google" only when it is configured (react-starter-kit's `configuredSocialProviders` idea).
+
+### 2.6-c: one-time secrets dialog carries the Apps Script steps
+
+- After "Add" (and after "Rotate token"), a dialog shows `Code.gs`, the webhook secret and the 4 setup steps (new project → paste → run `setup` → consent screen). Closing it loses the values, as the API returns them once.
+
+### 2.6-d: manual check (2026-09-24)
+
+- Bun server with the built SPA; sign-up, create config (`Code.gs` contains the token), ingest of the 2 real CAKE emails → 2 transactions, 1 delivery retrying (no receiver running). Headless Chrome screenshots (CDP, session cookie from the sign-up) of `/`, `/transactions`, `/deliveries` show the data correctly (VN time, signed amounts, order code, delivery status). The sign-in/Google flow and dialogs are covered again by the Playwright E2E in 3.6.

@@ -6,7 +6,7 @@ import { user } from '../src/core/db/schema';
 import type { Deps } from '../src/core/deps';
 import { createTestDb } from './db';
 import { makeDeps } from './deps';
-import { ORIGIN, signUp as signUpAs } from './http';
+import { json, ORIGIN, signUp as signUpAs } from './http';
 
 let db: Database;
 let close: () => Promise<void>;
@@ -59,4 +59,9 @@ test('ingest stays public (token-authenticated, no session)', async () => {
   expect(res.status).toBe(401);
   const body: unknown = await res.json();
   expect(body).toEqual({ error: { code: 'unauthorized' } });
+});
+
+test('public config lists configured social providers', async () => {
+  const res = await app.request('/api/config');
+  expect(await json(res)).toEqual({ socialProviders: [] });
 });

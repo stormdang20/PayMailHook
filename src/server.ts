@@ -42,6 +42,6 @@ setInterval(() => runMaintenance(deps).catch(console.error), 60 * 60 * 1000);
 const app = createApp(() => deps);
 const spa = serveStatic({ path: './dist/client/index.html' });
 app.use('*', serveStatic({ root: './dist/client' }));
-app.get('*', (c, next) => (c.req.path.startsWith('/api/') ? c.notFound() : spa(c, next)));
+app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : spa(c, next)));
 
 export default { port: Number(process.env.PORT ?? 3000), fetch: app.fetch };
