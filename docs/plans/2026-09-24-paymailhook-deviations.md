@@ -200,3 +200,26 @@ Every place where the implementation differs from [the plan](2026-09-24-paymailh
 ### Result
 
 All 6 real sample emails in `mail-template/` verify with live DNS (the real-sample test runs on the dev machine).
+
+---
+
+## Task 1.6: Webhook signing and URL validation
+
+### 1.6-a: trailing-dot hostnames normalized (security)
+
+- **Plan:** compares `url.hostname` directly.
+- **Done:** strips one trailing `.` before the checks; tests for `localhost.`, `printer.local.` and `127.0.0.1.`.
+- **Cause:** `localhost.` is the fully-qualified form of `localhost` and resolves to the same place, but it contains a dot, is not equal to `'localhost'` and does not end with `.localhost`, so the plan code accepted it. Same for `*.local.` and for the app's own host with a trailing dot. That is an SSRF bypass of design §3.4.
+- **Why this way:** one `replace`, applied before every host rule.
+
+### 1.6-b: native base64 (follows 1.2-a)
+
+- `newWebhookSecret` and `signWebhook` use `.toBase64()` / `Uint8Array.fromBase64()` instead of importing `toBase64`/`fromBase64` from `./crypto`, which no longer exist.
+
+### 1.6-c: a few more table cases
+
+- `:443` explicit (allowed), a dotless host (`intranet`), and `ftp:` in self-host mode (`invalid_protocol`), so every branch of `validateWebhookUrl` is exercised.
+
+### Reference check
+
+`svix-webhooks` (`webhook_http_client.rs`, `is_allowed`) filters **resolved IPs**, which requires DNS control that Workers does not give; this matches the `ponytail:` note already in design §3.4.
