@@ -719,3 +719,9 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 
 - The route is registered with the API routes, before the SPA fallback (plan's note). The Worker's `assets.run_worker_first` now lists `/mcp`, otherwise Cloudflare would serve `index.html` for it; the Bun server's SPA fallback skips `/mcp` too.
 - Not tried with MCP Inspector or Xiaozhi by the agent (user checklist).
+
+### 4.3-d: API keys page (gap from P2)
+
+- README's P2 scope lists "API keys", but no P2 task built a UI for them; better-auth's endpoints existed but users had no way to create a key for the REST API or `/mcp`.
+- Added `/api-keys`: list (name, first characters, created), create (key shown once in the same one-time dialog as secrets), delete. It calls the plugin's own endpoints through `authClient.apiKey.*`. The better-auth client helper `authCall()` moved to `web/lib/auth.ts` (used by admin and API keys pages).
+- Manual check on the Bun server + Postgres: key created through `/api/auth/api-key/create`, `/mcp` `initialize` and `get_payment_status` answered (`paid: true, totalAmount: 149000` for a real ingested order), no key → 401.

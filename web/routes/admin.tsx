@@ -9,15 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { authClient } from '@/lib/auth';
+import { authClient, authCall as run } from '@/lib/auth';
 import { formatTime } from '@/lib/format';
-
-/** Throws better-auth client errors so TanStack Query reports them. */
-async function run<T>(call: Promise<{ data: T; error: { message?: string } | null }>) {
-  const { data, error } = await call;
-  if (error) throw new Error(error.message ?? 'Không thành công');
-  return data;
-}
 
 function PasswordDialog({ userId, onClose }: { userId: string | null; onClose: () => void }) {
   const reset = useMutation({

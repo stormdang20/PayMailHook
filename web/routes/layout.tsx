@@ -9,6 +9,7 @@ const NAV = [
   { to: '/transactions', label: 'Giao dịch' },
   { to: '/deliveries', label: 'Webhook' },
   { to: '/qr', label: 'Mã QR' },
+  { to: '/api-keys', label: 'API key' },
   { to: '/guide', label: 'Hướng dẫn' },
 ];
 

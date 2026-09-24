@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { Toaster } from './components/ui/sonner';
 import { AdminPage } from './routes/admin';
+import { ApiKeysPage } from './routes/api-keys';
 import { AuthPage } from './routes/auth-page';
 import { ConfigsPage } from './routes/configs';
 import { DeliveriesPage } from './routes/deliveries';
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: 'deliveries', Component: DeliveriesPage },
       { path: 'qr', Component: QrPage },
       { path: 'admin', Component: AdminPage },
+      { path: 'api-keys', Component: ApiKeysPage },
     ],
   },
 ]);
