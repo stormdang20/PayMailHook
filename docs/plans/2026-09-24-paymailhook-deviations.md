@@ -294,3 +294,24 @@ All 6 real sample emails in `mail-template/` verify with live DNS (the real-samp
 ### 1.9-b: note, no body size limit before reading
 
 - The token is checked **before** the body is read, so unauthenticated clients can't make the server buffer a large body. An authenticated sender can still post up to the platform limit (Workers: 100MB) before `ingestRawEmail` rejects it as `too_large`. `hono/body-limit` fixes this with one line if it is ever abused. Not added now (no request for it, design §4.6 already defers ingest rate limiting).
+
+---
+
+## Task 1.12: Apps Script (done before 1.10)
+
+### 1.12-a: task order changed, 1.12 before 1.10
+
+- **Cause:** Task 1.10 Step 2 (`renderAppsScript` in `src/core/apps-script.ts`) reads `apps-script/Code.gs`, which Task 1.12 creates. Doing 1.10 first would mean a placeholder `Code.gs` rewritten two tasks later.
+
+### 1.12-b: page through search results (data loss fix)
+
+- **Plan:** `GmailApp.search(query, 0, 50)`, one page, then `cursor = newest`.
+- **Done:** `findMessages()` reads pages of 50 until a short page.
+- **Cause:** Gmail returns threads **newest first**. With more than 50 matching threads since the cursor (e.g. after the server returned 5xx for a while, so the cursor did not move), the plan code sends only the 50 newest, then moves the cursor past all of them. Older threads beyond the first page are never sent. That is lost payments with no error anywhere.
+- **Test:** 120 threads, all 120 sent. The plan code sends 50.
+- **Quota:** each extra page is one `GmailApp.search` call; only happens with a backlog.
+
+### 1.12-c: extra tests
+
+- A message older than `cursor - 300` in the same thread as a new one is not resent.
+- The `Authorization` header carries the token placeholder (so `renderAppsScript` in 1.10 has a real target).
