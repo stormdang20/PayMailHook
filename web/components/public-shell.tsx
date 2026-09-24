@@ -4,7 +4,7 @@ import { Logo } from '@/components/logo';
 import { authClient } from '@/lib/auth';
 
 /** Frame for pages anyone can open: docs, privacy, share links. */
-export function PublicShell({ children, wide }: { children: ReactNode; wide?: boolean }) {
+export function PublicShell({ children }: { children: ReactNode }) {
   const { data: session } = authClient.useSession();
   return (
     <div className="min-h-svh">
@@ -14,9 +14,6 @@ export function PublicShell({ children, wide }: { children: ReactNode; wide?: bo
             <Logo />
           </Link>
           <nav className="ml-auto flex items-center gap-5 text-sm">
-            <Link to="/docs" className="text-muted-foreground hover:text-foreground">
-              Tài liệu
-            </Link>
             <Link to="/privacy" className="text-muted-foreground hover:text-foreground">
               Quyền riêng tư
             </Link>
@@ -26,7 +23,7 @@ export function PublicShell({ children, wide }: { children: ReactNode; wide?: bo
           </nav>
         </div>
       </header>
-      <main className={wide ? 'mx-auto max-w-5xl px-4 py-10' : 'mx-auto max-w-3xl px-4 py-10'}>{children}</main>
+      <main className="mx-auto max-w-3xl px-4 py-10">{children}</main>
     </div>
   );
 }

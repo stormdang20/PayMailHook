@@ -2,6 +2,7 @@ import { apiKey } from '@better-auth/api-key';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
+import { username } from 'better-auth/plugins/username';
 import type { Database } from './db/client';
 import { user } from './db/schema';
 import type { Env } from './env';
@@ -37,13 +38,18 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHead
     account: { accountLinking: { allowDifferentEmails: true } },
     plugins: [
       admin(),
+      username(), // sign in with a username or the email, like payhook.codes
       // The plugin's default is 10 requests per key per day, far too low for polling order status.
       apiKey({ rateLimit: { timeWindow: 60_000, maxRequests: 120 } }),
     ],
     rateLimit: {
       enabled: true,
       storage: 'database',
-      customRules: { '/sign-in/email': { window: 60, max: 5 }, '/sign-up/email': { window: 60, max: 3 } },
+      customRules: {
+        '/sign-in/email': { window: 60, max: 5 },
+        '/sign-in/username': { window: 60, max: 5 },
+        '/sign-up/email': { window: 60, max: 3 },
+      },
     },
     session: { cookieCache: { enabled: true, maxAge: 300 } }, // fewer queries, fewer Neon wake-ups
     advanced: {

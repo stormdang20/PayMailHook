@@ -36,6 +36,13 @@
       "when": 1790244364448,
       "tag": "0004_white_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790262371580,
+      "tag": "0005_clever_jazinda",
+      "breakpoints": true
     }
   ]
 }

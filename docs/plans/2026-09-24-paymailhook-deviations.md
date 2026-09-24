@@ -795,3 +795,14 @@ Link to Google's 2-Step Verification in the IMAP form (App Passwords need it; th
 - **Logo:** an envelope (the bank's notification email) stamped with a yellow tick badge (paid) on a jade tile; `web/public/logo.svg` (favicon, `theme-color`) and `<LogoMark>`/`<Logo>` components. A first draft read as a checkbox at large size and was redrawn with a visible envelope flap and a badge.
 - **Accessibility:** delivery rows keep click-to-open but gained a "Chi tiết" button so the detail opens from the keyboard; the SVG logo has a `<title>`.
 - Checked with headless-Chrome screenshots (sign-in, Kết nối, Giao dịch, Tài liệu) on the E2E server with demo data; E2E selector updated for the renamed page title.
+
+## Sign-in like payhook.codes, icon-only sign-out, docs inside the dashboard (2026-09-24)
+
+- **Reference:** payhook.codes' `/login` and `/register` (viewed with headless Chrome; no browser MCP was connected): sign in with a username and password, an "or" divider and "Sign in with Google"; register with username, email, password.
+- **Done:** better-auth's `username` plugin (migration `0005`: `user.username` unique, `display_username`). The sign-in field accepts **a username or an email** (an `@` routes to `signIn.email`, otherwise `signIn.username`), so accounts created before the change keep working with their email. Sign-up asks for username (3–30 of `A-Z a-z 0-9 _ .`), email and password; the username is also the display name. Google button with Google's "G" mark on both pages when Google sign-in is configured; better-auth error codes are translated.
+- **Kept stricter than payhook:** minimum password length stays 8 (better-auth's default), not payhook's 6.
+- **Security:** `/sign-in/username` gets the same rate-limit rule as `/sign-in/email` (5/min per client IP); otherwise it would be an unthrottled password-guessing path.
+- The brand panel's "open source / self-host" footnote was removed (user request); the panel content is centred with `my-auto`.
+- Sign-out is an icon button with `aria-label`/`title` ("Đăng xuất") on desktop and mobile.
+- `/docs` moved into the signed-in layout (sidebar item like the other sections) instead of a separate public page; public pages (privacy, share links) no longer link to it. The Markdown source stays in `docs/` for GitHub readers.
+- Tests: HTTP sign-up with a username, sign-in with username and with email, wrong password 401, duplicate username 400; E2E fills the new field.

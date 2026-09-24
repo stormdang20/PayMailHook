@@ -1,6 +1,6 @@
 import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
-import { PublicShell } from '@/components/public-shell';
+import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { renderDocs, withOrigin } from '@/lib/markdown';
@@ -29,18 +29,22 @@ export function DocsPage() {
       () => toast.error('Không copy được, hãy chọn và copy thủ công'),
     );
   return (
-    <PublicShell wide>
-      <Tabs defaultValue={location.hash === '#prompt' ? 'prompt' : 'api'}>
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-          <TabsList>
-            <TabsTrigger value="api">Tài liệu API</TabsTrigger>
-            <TabsTrigger value="prompt">Prompt tích hợp</TabsTrigger>
-          </TabsList>
+    <div>
+      <PageHeader
+        title="Tài liệu"
+        description="Cách hệ thống của bạn nhận thanh toán: webhook, REST API và MCP. Prompt tích hợp giúp coding agent tự làm phần này."
+        actions={
           <Button variant="outline" onClick={copyPrompt}>
             <Copy />
             Copy prompt tích hợp
           </Button>
-        </div>
+        }
+      />
+      <Tabs defaultValue={location.hash === '#prompt' ? 'prompt' : 'api'}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="api">Tài liệu API</TabsTrigger>
+          <TabsTrigger value="prompt">Prompt tích hợp</TabsTrigger>
+        </TabsList>
         <TabsContent value="api">
           <Prose html={api} />
         </TabsContent>
@@ -48,6 +52,6 @@ export function DocsPage() {
           <Prose html={promptHtml} />
         </TabsContent>
       </Tabs>
-    </PublicShell>
+    </div>
   );
 }

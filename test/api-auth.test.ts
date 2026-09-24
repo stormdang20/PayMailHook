@@ -88,3 +88,25 @@ test('an API key over its rate limit gets 429, not 401', async () => {
   expect(res.status).toBe(429);
   expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
 });
+
+test('sign up with a username, then sign in with either the username or the email', async () => {
+  const post = (path: string, body: object, ip = '198.51.100.7') =>
+    app.request(`/api/auth/${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ORIGIN, 'x-client-ip': ip },
+      body: JSON.stringify(body),
+    });
+  const password = 'correct-horse-battery';
+  const signUpRes = await post('sign-up/email', {
+    email: 'shop@test.dev',
+    password,
+    name: 'shop_owner',
+    username: 'Shop_Owner',
+  });
+  expect(signUpRes.status).toBe(200);
+  expect((await post('sign-in/username', { username: 'shop_owner', password })).status).toBe(200);
+  expect((await post('sign-in/email', { email: 'shop@test.dev', password })).status).toBe(200);
+  expect((await post('sign-in/username', { username: 'shop_owner', password: 'wrong-password-1' })).status).toBe(401);
+  const taken = await post('sign-up/email', { email: 'other@test.dev', password, name: 'x', username: 'shop_owner' });
+  expect(taken.status).toBe(400);
+});

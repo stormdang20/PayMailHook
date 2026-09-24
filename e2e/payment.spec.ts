@@ -7,6 +7,7 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
   const gmail = `shop.${Date.now()}@gmail.com`;
 
   await page.goto('/sign-up');
+  await page.getByLabel('Tên đăng nhập').fill(`owner${Date.now()}`);
   await page.getByLabel('Email').fill(`owner.${Date.now()}@test.dev`);
   await page.getByLabel('Mật khẩu').fill('correct-horse-battery');
   await page.getByRole('button', { name: 'Đăng ký' }).click();

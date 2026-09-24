@@ -21,7 +21,6 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 const router = createBrowserRouter([
   { path: '/sign-in', element: <AuthPage mode="sign-in" /> },
   { path: '/sign-up', element: <AuthPage mode="sign-up" /> },
-  { path: '/docs', Component: DocsPage },
   { path: '/guide', element: <Navigate to="/docs" replace /> },
   { path: '/privacy', Component: PrivacyPage },
   { path: '/share/t/:token', Component: SharedTransactionPage },
@@ -35,6 +34,7 @@ const router = createBrowserRouter([
       { path: 'qr', Component: QrPage },
       { path: 'admin', Component: AdminPage },
       { path: 'api-keys', Component: ApiKeysPage },
+      { path: 'docs', Component: DocsPage },
     ],
   },
 ]);

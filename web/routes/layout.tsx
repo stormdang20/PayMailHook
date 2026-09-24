@@ -79,9 +79,14 @@ export function Layout() {
           </p>
           <div className="flex items-center justify-between">
             <PushToggle />
-            <Button variant="ghost" size="sm" onClick={() => authClient.signOut()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Đăng xuất"
+              title="Đăng xuất"
+              onClick={() => authClient.signOut()}
+            >
               <LogOut />
-              Đăng xuất
             </Button>
           </div>
         </div>
