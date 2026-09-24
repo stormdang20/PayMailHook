@@ -1,0 +1,3 @@
+[test]
+# repo-ref/ holds third-party test suites; keep discovery to our own tests.
+root = "test"
