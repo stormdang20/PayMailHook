@@ -3,3 +3,8 @@ repo-ref/
 
 # Raw bank emails contain real PII — commit only anonymized fixtures
 mail-template/
+
+# Local secrets
+.env
+.env.*
+!.env.example
