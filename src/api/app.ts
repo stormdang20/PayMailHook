@@ -1,12 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
+import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { sha256Hex } from '../core/crypto';
-import { emailConfigs } from '../core/db/schema';
+import { emailConfigs, user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { ingestRawEmail } from '../core/ingest';
+import { isPublicPath, requireUser } from './auth';
 
-export type AppEnv = { Variables: { deps: Deps } };
+export type SessionUser = { id: string; role: string | null };
+export type AppEnv = { Variables: { deps: Deps; user: SessionUser } };
 
 export function createApp(makeDeps: (c: Context) => Deps) {
   const app = new Hono<AppEnv>();
@@ -20,6 +23,20 @@ export function createApp(makeDeps: (c: Context) => Deps) {
   app.use('*', async (c, next) => {
     c.set('deps', makeDeps(c));
     await next();
+  });
+
+  // Only form-like bodies can be sent cross-site without a CORS preflight; compare with the public host.
+  const sameSite = csrf({ origin: (origin, c) => URL.canParse(origin) && new URL(origin).host === c.var.deps.appHost });
+  app.use('/api/*', (c, next) => (isPublicPath(c.req.path) ? next() : sameSite(c, next)));
+  app.on(['GET', 'POST'], '/api/auth/*', (c) => c.var.deps.auth.handler(c.req.raw));
+  app.use('/api/*', requireUser);
+
+  app.get('/api/me', async (c) => {
+    const [me] = await c.var.deps.db
+      .select({ id: user.id, email: user.email, name: user.name, role: user.role })
+      .from(user)
+      .where(eq(user.id, c.var.user.id));
+    return c.json(me);
   });
 
   app.post('/api/ingest', async (c) => {

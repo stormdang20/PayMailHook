@@ -433,3 +433,24 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 2.1-g: `RESEND_API_KEY` (email verification / password reset) deferred
 
 - Design §4.4 enables them when `RESEND_API_KEY` is set. Not in the plan's task list, and untestable without a sending domain. Admins reset passwords through the admin plugin meanwhile.
+
+## Task 2.2: Middleware
+
+### 2.2-a: API keys of banned users are rejected
+
+- **Cause:** `auth.api.getSession()` refuses banned users (admin plugin), but `verifyApiKey()` does not look at bans. Without an extra check, a banned user keeps full API access through keys created before the ban.
+- **Done:** after a valid key, `requireUser` reads the owner's `banned`/`banExpires` (one indexed lookup, only on API-key requests). Tested.
+
+### 2.2-b: CSRF scoped to authenticated paths, origin compared with the public host
+
+- **Plan:** `csrf()` on the API.
+- **Done:** Hono's `csrf()` runs only on paths `requireUser` protects, and its origin check compares against `appHost` (from `BETTER_AUTH_URL`).
+- **Cause:**
+  - Hono's `csrf()` (read in `node_modules/hono/dist/middleware/csrf`) only checks form-like content types (`x-www-form-urlencoded`, `multipart/form-data`, `text/plain`, or none). That is the right scope: a cross-site JSON request needs a CORS preflight, which this app never grants.
+  - Applied to `/api/ingest` it blocked Apps Script-style requests without a content type and `curl --data-binary` (which defaults to form encoding). Ingest authenticates with its token, and `/api/auth/*` has better-auth's own origin check.
+  - The default compares with `c.req.url`'s origin, which is wrong behind a reverse proxy (Docker self-host) where the internal URL differs from the public one.
+
+### 2.2-c: `c.var.user` holds `{ id, role }`
+
+- API-key requests get `role: null`: admin actions go through better-auth's admin endpoints, which require a real session.
+- `GET /api/me` added (design §4.3 route list) to exercise the middleware.
