@@ -82,7 +82,7 @@ export function validateWebhookUrl(raw: string, policy: UrlPolicy): string | nul
 const RETRY_SCHEDULE = [10, 10, 20, 30, 50, 3600, 7200, 14400, 28800];
 
 type Delivery = typeof webhookDeliveries.$inferSelect;
-export type Outcome = { statusCode: number | null; responseBody: string | null; error: string | null };
+type Outcome = { statusCode: number | null; responseBody: string | null; error: string | null };
 
 /** Conditional UPDATE as a lease: only one caller wins, a crashed sender is retried after 60s (design §3.2). */
 async function claim(deps: Deps, id: string, trigger: Trigger) {

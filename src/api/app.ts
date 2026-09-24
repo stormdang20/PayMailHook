@@ -16,7 +16,7 @@ import { qrRoutes } from './qr';
 import { shareRoutes } from './share';
 import { transactionRoutes } from './transactions';
 
-export type SessionUser = { id: string; role: string | null };
+type SessionUser = { id: string; role: string | null };
 export type AppEnv = { Variables: { deps: Deps; user: SessionUser } };
 
 export function createApp(makeDeps: (c: Context) => Deps) {

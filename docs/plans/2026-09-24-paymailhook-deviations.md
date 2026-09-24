@@ -756,3 +756,17 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - As the design says, `gmail.readonly` is a restricted scope: until Google verification/CASA, the consent screen shows the "unsafe" warning and only test users (max 100) can connect.
 - Known rough edges (`ponytail`): after creating a Gmail OAuth config the page leaves for Google immediately, so the one-time webhook secret isn't shown (rotate it from the card); if Google doesn't return a refresh token (account consented offline access before), the token stops working after an hour and the card asks to reconnect.
 - Tests: fake Gmail API: connect picks the owning account / mismatch error; push with wrong token → 403; only bank mail downloaded and stored; history id advanced; stale history → fallback; renewal keeps the history id. Not tried against real Google (user checklist).
+
+---
+
+# Wrap-up
+
+## Final ponytail review (all phases)
+
+- Removed the unused `GMAIL_SCOPE` constant (the SPA keeps its own copy of the scope string; it can't import server code).
+- `GmailError`, `Outcome`, `SessionUser` no longer exported (used only in their own files).
+- README: optional features table (Google sign-in, Web Push, Gmail OAuth with the Pub/Sub setup steps, API keys/MCP), `bun run e2e`; `.env.example` and `docker-compose.yml` pass the new optional variables.
+
+## Left to the user (needs real accounts, devices or money)
+
+Tracked in the reply to the user and README "Next steps": Cloudflare/Neon deployment and the Task 1.13 spike (Apps Script `getRawContent()` DKIM, Workers CPU time), pushing to GitHub for CI, a real transfer, IMAP with an App Password (including reconnect after a network drop), a Web Push notification in a real browser, an MCP client, VietQR scan with a banking app, and the Gmail OAuth + Pub/Sub flow.

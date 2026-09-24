@@ -2,7 +2,7 @@
 
 Accept bank transfers automatically by reading your bank's **balance-notification emails**, then fire a **webhook** to your system when the transfer description contains an order code. Feature parity with [payhook.codes](https://payhook.codes). Open source, with two ways to use it: **Hosted** (a shared free instance on Cloudflare) and **Self-host** (Docker on your own machine).
 
-> **Status:** P1 (core pipeline), P2 (accounts, dashboard) and P2.5 (self-host) are implemented. Not yet verified end to end on a real Gmail + Cloudflare deployment. Research: [docs/research.md](docs/research.md). Design: [docs/design.md](docs/design.md).
+> **Status:** all phases (P1–P4) are implemented and tested (unit/integration on PGlite, a Playwright E2E). Not yet verified end to end on a real Gmail + Cloudflare deployment. Research: [docs/research.md](docs/research.md). Design: [docs/design.md](docs/design.md).
 
 Supported banks: **CAKE by VPBank** and **Timo**.
 
@@ -86,6 +86,22 @@ Requirements: a Cloudflare account and a [Neon](https://neon.tech) Postgres data
 
 The hourly cron re-queues stuck deliveries and deletes old logs; nothing else needs scheduling.
 
+### Optional features
+
+| Feature | Enable with | Notes |
+|---|---|---|
+| Sign in with Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth client of type "Web application"; redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google` |
+| Web Push on incoming money | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | `bun scripts/generate-vapid.ts` prints a pair; users click "Bật thông báo" |
+| Gmail OAuth source (1-click, no script) | `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN` + Google sign-in | See below. `gmail.readonly` is a restricted scope: "unsafe" warning and max 100 test users until Google's verification |
+| API keys / MCP | nothing | Create keys on the "API key" page. REST: header `x-api-key`. MCP endpoint `<app>/mcp` with `Authorization: Bearer <key>`; tools `list_transactions`, `get_payment_status` |
+
+**Gmail OAuth setup** (Google Cloud project of the OAuth client):
+1. Enable the Gmail API and the Pub/Sub API.
+2. Add the scope `https://www.googleapis.com/auth/gmail.readonly` to the OAuth consent screen and your Gmail as a test user.
+3. Create a Pub/Sub topic; grant `gmail-api-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role on it.
+4. Create a **push** subscription on the topic with endpoint `<BETTER_AUTH_URL>/api/gmail/pubsub?token=<random token>`.
+5. Set `GOOGLE_PUBSUB_TOPIC=projects/<project>/topics/<topic>` and `GOOGLE_PUBSUB_VERIFICATION_TOKEN=<the same random token>`.
+
 ### Development
 
 ```bash
@@ -96,6 +112,7 @@ bun run dev                             # API on :3000 (PORT to change), with IM
 bun run dev:web                         # SPA on :5173, proxies /api to API_URL (default http://localhost:3000)
 bun run check                           # Biome + tsc + bun test (PGlite, no database needed)
 bun run build:worker                    # SPA build + Worker bundle dry run
+bun run e2e                             # Playwright: builds the SPA, runs e2e/server.ts on in-memory PGlite
 ```
 
 `scripts/create-config.ts <gmail> <webhookUrl>` creates a config without the dashboard; `scripts/anonymize-fixtures.ts` rebuilds `test/fixtures/` from local real emails.
@@ -161,6 +178,6 @@ test/            # bun test + PGlite; fixtures/ are anonymized bank emails (real
 
 - [x] Detailed design: [docs/design.md](docs/design.md) (schema, email intake flow, webhooks, API/auth, testing)
 - [x] Implementation plan: [docs/plans/2026-09-24-paymailhook.md](docs/plans/2026-09-24-paymailhook.md); deviations and their reasons: [docs/plans/2026-09-24-paymailhook-deviations.md](docs/plans/2026-09-24-paymailhook-deviations.md)
-- [x] P1 core pipeline, P2 accounts and dashboard, P2.5 self-host
+- [x] P1 core pipeline, P2 accounts and dashboard, P2.5 self-host, P3 dashboard, P4 extensions
 - [ ] Spike on a real deployment: does Apps Script's `getRawContent()` pass DKIM; CPU time per ingest on Workers (10 ms free limit)
-- [ ] P3 dashboard extras, P4 extensions
+- [ ] Real-world checks: IMAP reconnect, Web Push delivery, MCP client, Gmail OAuth with Pub/Sub

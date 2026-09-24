@@ -8,13 +8,12 @@ import type { Deps } from './deps';
 import { ingestRawEmail } from './ingest';
 import { normalizeEmail } from './text';
 
-export const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 export type GmailPush = { topic: string; verificationToken: string };
 
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const RECENT_BANK_MAIL = `from:(${BANKS.flatMap((b) => b.senders).join(' OR ')}) newer_than:1d`;
 
-export class GmailError extends Error {
+class GmailError extends Error {
   constructor(
     readonly status: number,
     body: string,
