@@ -315,3 +315,34 @@ All 6 real sample emails in `mail-template/` verify with live DNS (the real-samp
 
 - A message older than `cursor - 300` in the same thread as a new one is not resent.
 - The `Authorization` header carries the token placeholder (so `renderAppsScript` in 1.10 has a real target).
+
+---
+
+## Task 1.10: Bun entry (Self-host/dev) and config creation script
+
+### 1.10-a: `Code.gs` imported with `with { type: 'text' }` plus a `*.gs` module declaration
+
+- **Plan:** "read `apps-script/Code.gs` (imported as text)", no mechanism given.
+- **Done:** `import template from '../../apps-script/Code.gs' with { type: 'text' }` and `src/types.d.ts` declaring `*.gs` modules as `string`.
+- **Why:** Bun needs the import attribute for an unknown extension; the Workers bundle (Task 1.11) must accept the same import. Placeholders are replaced with replacer functions, so a value containing `$&` is inserted literally (tested).
+
+### 1.10-b: `required()` written as a plain function
+
+- **Plan:** `env[name] ?? (() => { throw … })()`.
+- **Done:** a 4-line function with an `if`; also treats an empty string (e.g. `ENCRYPTION_KEY=` copied from `.env.example`) as missing, which `??` did not.
+
+### 1.10-c: `create-config.ts` details
+
+- Third optional argument `ingestUrl` (default `http://localhost:3000/api/ingest`), because Task 1.13 runs the same script against Neon with the Worker's URL.
+- Validates the webhook URL with `validateWebhookUrl` using the same env as the server, so a typo fails at creation instead of at the first delivery.
+- Stores `gmail` trimmed and lowercased (design §1).
+
+### 1.10-d: manual check results (2026-09-24)
+
+Run against the dev Postgres container (`bun run db:migrate` works as-is because `bun run` passes `.env` to drizzle-kit).
+
+- Port 3000 is taken by another project on the dev machine; the server was run with `PORT=3010`.
+- The real CAKE incoming email carries the real order code prefix `PAYHOOK`, so the dev config's `order_prefix` was set to `PAYHOOK` by SQL for this check only.
+- Results with the 6 real emails from `mail-template/`:
+  - CAKE outgoing → `stored`; CAKE incoming → `stored` + delivery; the webhook reached a local receiver and **verified with the `standardwebhooks` library**. Sending it again → `duplicate`.
+  - Timo emails to the CAKE config's Gmail → `to_mismatch` (expected: different mailbox). With a second config for the Timo Gmail, all 4 → `stored` (DKIM with the Gmail `Date` retry, live DNS), amounts, direction and Vietnam time correct.
