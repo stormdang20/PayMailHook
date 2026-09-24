@@ -15,6 +15,13 @@
       "when": 1790238851799,
       "tag": "0001_milky_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790242789576,
+      "tag": "0002_daffy_malice",
+      "breakpoints": true
     }
   ]
 }

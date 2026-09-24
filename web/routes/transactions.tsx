@@ -1,5 +1,6 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { ShareButton } from '@/components/share-button';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +13,8 @@ type Direction = 'all' | 'in' | 'out';
 
 export function TransactionsPage() {
   const [direction, setDirection] = useState<Direction>('all');
+  const queryClient = useQueryClient();
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['transactions'] });
   const pages = useInfiniteQuery({
     queryKey: ['transactions', direction],
     initialPageParam: '',
@@ -52,6 +55,7 @@ export function TransactionsPage() {
             <TableHead className="text-right">Số tiền</TableHead>
             <TableHead>Nội dung</TableHead>
             <TableHead>Mã đơn</TableHead>
+            <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -72,11 +76,22 @@ export function TransactionsPage() {
                 {t.description}
               </TableCell>
               <TableCell>{t.orderId ?? '—'}</TableCell>
+              <TableCell className="text-right">
+                <ShareButton
+                  label="Chia sẻ"
+                  description="Ai có link đều xem được số tiền, thời gian, nội dung và mã đơn của giao dịch này (không có thông tin người chuyển)."
+                  token={t.shareToken}
+                  pathFor={(token) => `/share/t/${token}`}
+                  share={() => parseResponse(api.transactions[':id'].share.$post({ param: { id: t.id } }))}
+                  revoke={() => api.transactions[':id'].share.$delete({ param: { id: t.id } })}
+                  onChange={refresh}
+                />
+              </TableCell>
             </TableRow>
           ))}
           {pages.isSuccess && rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 Chưa có giao dịch.
               </TableCell>
             </TableRow>

@@ -7,6 +7,7 @@ import { emailConfigs } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { buildPayload, newWebhookSecret, postWebhook, urlPolicy, validateWebhookUrl } from '../core/webhook';
 import type { AppEnv } from './app';
+import { share, unshare } from './share';
 import { validate } from './validate';
 
 /** Never select token hashes or encrypted secrets into a response. */
@@ -19,6 +20,7 @@ const publicColumns = {
   lastIngestAt: emailConfigs.lastIngestAt,
   ingestError: emailConfigs.ingestError,
   hasImapPassword: sql<boolean>`${emailConfigs.imapPasswordEnc} is not null`,
+  shareToken: emailConfigs.shareToken,
   createdAt: emailConfigs.createdAt,
 };
 
@@ -185,4 +187,12 @@ export const emailConfigRoutes = new Hono<AppEnv>()
     const started = Date.now();
     const outcome = await postWebhook(deps, id, payload, config.url, config.secretEnc);
     return c.json({ ...outcome, durationMs: Date.now() - started });
+  })
+  .post('/:id/share', idParam, async (c) => {
+    const token = await share(c.var.deps.db, emailConfigs, c.var.user.id, c.req.valid('param').id);
+    return token ? c.json({ token }) : c.json(notFound, 404);
+  })
+  .delete('/:id/share', idParam, async (c) => {
+    const done = await unshare(c.var.deps.db, emailConfigs, c.var.user.id, c.req.valid('param').id);
+    return done ? c.body(null, 204) : c.json(notFound, 404);
   });

@@ -9,6 +9,7 @@ import { ConfigsPage } from './routes/configs';
 import { DeliveriesPage } from './routes/deliveries';
 import { Layout } from './routes/layout';
 import { QrPage } from './routes/qr';
+import { SharedListPage, SharedTransactionPage } from './routes/share';
 import { TransactionsPage } from './routes/transactions';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -16,6 +17,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 const router = createBrowserRouter([
   { path: '/sign-in', element: <AuthPage mode="sign-in" /> },
   { path: '/sign-up', element: <AuthPage mode="sign-up" /> },
+  { path: '/share/t/:token', Component: SharedTransactionPage },
+  { path: '/share/c/:token', Component: SharedListPage },
   {
     Component: Layout,
     children: [

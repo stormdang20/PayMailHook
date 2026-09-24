@@ -42,6 +42,8 @@ export const emailConfigs = pgTable(
     orderPrefix: text('order_prefix').notNull().default('PMH'),
     webhookUrl: text('webhook_url'),
     webhookSecretEnc: text('webhook_secret_enc'),
+    /** Public read-only link to this config's incoming transactions (cashier screen); null = not shared. */
+    shareToken: text('share_token').unique(),
     createdAt: createdAt(),
     updatedAt: tz('updated_at')
       .notNull()
@@ -73,6 +75,8 @@ export const transactions = pgTable(
     counterpartyName: text('counterparty_name'),
     counterpartyAccount: text('counterparty_account'),
     counterpartyBank: text('counterparty_bank'),
+    /** Public link to this one transaction (proof of payment); null = not shared. */
+    shareToken: text('share_token').unique(),
     occurredAt: tz('occurred_at').notNull(),
     createdAt: createdAt(),
   },

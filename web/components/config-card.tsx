@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { toast } from 'sonner';
 import { ConfirmButton } from '@/components/confirm-button';
 import type { Secret } from '@/components/secret-dialog';
+import { ShareButton } from '@/components/share-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,6 +87,15 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
           <Status config={config} />
         </CardDescription>
         <CardAction className="flex gap-2">
+          <ShareButton
+            label="Link thu ngân"
+            description="Ai có link đều xem được danh sách tiền vào của Gmail này (tự cập nhật). Không lộ Gmail, webhook hay thông tin người chuyển."
+            token={config.shareToken}
+            pathFor={(token) => `/share/c/${token}`}
+            share={() => parseResponse(byId.share.$post({ param }))}
+            revoke={() => byId.share.$delete({ param })}
+            onChange={refresh}
+          />
           <Button
             variant="outline"
             size="sm"

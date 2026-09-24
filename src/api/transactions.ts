@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { transactions } from '../core/db/schema';
 import type { AppEnv } from './app';
 import { keyset, pageQuery } from './pagination';
+import { share, unshare } from './share';
 import { validate } from './validate';
 
 const columns = {
@@ -21,9 +22,12 @@ const columns = {
   counterpartyBank: transactions.counterpartyBank,
   occurredAt: transactions.occurredAt,
   createdAt: transactions.createdAt,
+  shareToken: transactions.shareToken,
 };
 
 const byTime = keyset(transactions.occurredAt, transactions.id);
+const idParam = validate('param', z.object({ id: z.uuid() }));
+const notFound = { error: { code: 'not_found' } };
 
 export const transactionRoutes = new Hono<AppEnv>()
   .get(
@@ -56,10 +60,18 @@ export const transactionRoutes = new Hono<AppEnv>()
       return c.json(byTime.page(rows, q.limit));
     },
   )
-  .get('/:id', validate('param', z.object({ id: z.uuid() })), async (c) => {
+  .get('/:id', idParam, async (c) => {
     const [txn] = await c.var.deps.db
       .select(columns)
       .from(transactions)
       .where(and(eq(transactions.id, c.req.valid('param').id), eq(transactions.userId, c.var.user.id)));
-    return txn ? c.json(txn) : c.json({ error: { code: 'not_found' } }, 404);
+    return txn ? c.json(txn) : c.json(notFound, 404);
+  })
+  .post('/:id/share', idParam, async (c) => {
+    const token = await share(c.var.deps.db, transactions, c.var.user.id, c.req.valid('param').id);
+    return token ? c.json({ token }) : c.json(notFound, 404);
+  })
+  .delete('/:id/share', idParam, async (c) => {
+    const done = await unshare(c.var.deps.db, transactions, c.var.user.id, c.req.valid('param').id);
+    return done ? c.body(null, 204) : c.json(notFound, 404);
   });

@@ -618,3 +618,21 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 
 - `/qr`: bank (VietQR-enabled banks from `vietnam-qr-pay`, CAKE preselected), account, optional amount and description; the preview is an `<img>` of `/api/qr`, with a "copy image link" button for embedding.
 - Considered lazy-loading the route; measured the page chunk at 10.6 KB gzip, not worth the extra code. The SPA main chunk is 187 KB gzip (up from 133 KB at 2.5, mostly the Radix dialog/select components added in 2.6).
+
+## Task 3.4: Transaction sharing
+
+### 3.4-a: scope decided by the user: both a single transaction and a per-Gmail list
+
+- The plan required settling the scope first; the user chose **both** (2026-09-24).
+- `transactions.share_token` (proof of one payment) and `email_configs.share_token` (cashier screen), nullable + unique (migration `0002`). Tokens are 24 random bytes (base64url), stored in plain text so the owner can copy the link again; revoking sets the column to `null`.
+- Owner endpoints: `POST/DELETE /api/transactions/:id/share` and `POST/DELETE /api/email-configs/:id/share`. `POST` is idempotent (`coalesce` keeps an existing token), returns 404 for someone else's row.
+- Public endpoints (`/api/share/*`, already in `PUBLIC_PATHS`): `GET /api/share/t/:token` and `GET /api/share/c/:token` (keyset pagination).
+
+### 3.4-b: what a public link shows
+
+- Fields: bank, direction, amount, description, order code, bank transaction id, time (and the row id for list keys). **Not** the Gmail, webhook URL, config/user ids, or counterparty name/account: those are the payer's personal data. Tests search the public JSON for all of them (plan's done criterion: no `webhook_url` or config details).
+- The list link shows **incoming money only**; outgoing transfers reveal what the shop spends and a cashier screen doesn't need them. It refreshes every 5 s like the dashboard.
+
+### 3.4-c: manual check
+
+- Public pages `/share/t/:token` and `/share/c/:token` rendered in headless Chrome without a session; an unknown token shows "link does not exist or was revoked".
