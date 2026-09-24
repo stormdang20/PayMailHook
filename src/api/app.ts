@@ -7,6 +7,7 @@ import { emailConfigs, user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
+import { emailConfigRoutes } from './email-configs';
 
 export type SessionUser = { id: string; role: string | null };
 export type AppEnv = { Variables: { deps: Deps; user: SessionUser } };
@@ -26,7 +27,9 @@ export function createApp(makeDeps: (c: Context) => Deps) {
   });
 
   // Only form-like bodies can be sent cross-site without a CORS preflight; compare with the public host.
-  const sameSite = csrf({ origin: (origin, c) => URL.canParse(origin) && new URL(origin).host === c.var.deps.appHost });
+  const sameSite = csrf({
+    origin: (origin, c) => URL.canParse(origin) && new URL(origin).host === new URL(c.var.deps.appUrl).host,
+  });
   app.use('/api/*', (c, next) => (isPublicPath(c.req.path) ? next() : sameSite(c, next)));
   app.on(['GET', 'POST'], '/api/auth/*', (c) => c.var.deps.auth.handler(c.req.raw));
   app.use('/api/*', requireUser);
@@ -38,6 +41,8 @@ export function createApp(makeDeps: (c: Context) => Deps) {
       .where(eq(user.id, c.var.user.id));
     return c.json(me);
   });
+
+  app.route('/api/email-configs', emailConfigRoutes);
 
   app.post('/api/ingest', async (c) => {
     const { deps } = c.var;

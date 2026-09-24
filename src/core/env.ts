@@ -36,5 +36,3 @@ export type Env = z.infer<typeof schema>;
 
 /** Validated on first use, not at module load: Workers only has `env` inside a handler (design §4.5). */
 export const parseEnv = (raw: Record<string, unknown>): Env => schema.parse(raw);
-
-export const appHost = (env: Env) => new URL(env.BETTER_AUTH_URL).host;

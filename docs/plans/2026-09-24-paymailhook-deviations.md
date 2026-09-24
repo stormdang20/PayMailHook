@@ -454,3 +454,26 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 
 - API-key requests get `role: null`: admin actions go through better-auth's admin endpoints, which require a real session.
 - `GET /api/me` added (design §4.3 route list) to exercise the middleware.
+
+## Task 2.3: Email config CRUD
+
+### 2.3-a: decisions not spelled out in the design
+
+- **POST also returns a webhook secret** (once), generated even without a URL, so adding the URL later needs no extra "rotate" step. Only the encrypted secret is stored.
+- **`gmail` cannot be changed by PATCH.** It is what DKIM `To` is checked against and what the partial unique index claims; changing it would silently re-point ingest. Delete and recreate instead.
+- **`orderPrefix` must be 1–16 letters/digits**, stored uppercase. Closes open item 1.4-d (an empty prefix would match every description).
+- **Response bodies select explicit public columns**, so `ingest_token_hash`, `webhook_secret_enc` and `imap_password_enc` can never leak through a `select *` (tested by searching the JSON).
+- **Invalid `:id` (not a uuid) is 400**, not a 500 from Postgres' `invalid input syntax for type uuid`.
+- **`test-webhook`** validates the URL (SSRF) before sending, signs with the current secret, and returns the outcome (`statusCode`, `responseBody`, `error`, `durationMs`) directly; nothing stored.
+
+### 2.3-b: `Deps.appHost` replaced by `Deps.appUrl`
+
+- The Apps Script needs the full ingest URL (`${appUrl}/api/ingest`); the host for SSRF and CSRF checks is derived from it (`urlPolicy(deps)`). One field instead of two that could disagree.
+
+### 2.3-c: `postWebhook()` extracted from `deliver()`
+
+- The "Send test" button and scheduled deliveries share one signed-POST implementation (same headers, timeout, `redirect: 'manual'`).
+
+### 2.3-d: test helpers `test/http.ts`
+
+- `signUp`, `call` and `json` shared by API tests. `json()` returns `any` (with a Biome ignore comment) because `Response.json()` resolves to a conflicting type when Bun and Workers typings are both loaded (see 1.0-c).

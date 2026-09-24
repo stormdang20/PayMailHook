@@ -6,8 +6,8 @@ import { user } from '../src/core/db/schema';
 import type { Deps } from '../src/core/deps';
 import { createTestDb } from './db';
 import { makeDeps } from './deps';
+import { ORIGIN, signUp as signUpAs } from './http';
 
-const ORIGIN = 'http://app.test';
 let db: Database;
 let close: () => Promise<void>;
 let deps: Deps;
@@ -19,21 +19,7 @@ beforeEach(async () => {
 });
 afterEach(() => close());
 
-/** Signs up through the real HTTP endpoint and returns the session cookie. */
-async function signUp(email = 'a@test.dev') {
-  const res = await app.request('/api/auth/sign-up/email', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: ORIGIN },
-    body: JSON.stringify({ email, password: 'correct-horse-battery', name: 'A' }),
-  });
-  expect(res.status).toBe(200);
-  const cookie = res.headers
-    .getSetCookie()
-    .map((c) => c.split(';')[0])
-    .join('; ');
-  const [row] = await db.select().from(user).where(eq(user.email, email));
-  return { cookie, userId: row.id };
-}
+const signUp = (email?: string) => signUpAs(app, db, email);
 
 test('no session and no API key is 401', async () => {
   expect((await app.request('/api/me')).status).toBe(401);

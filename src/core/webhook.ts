@@ -46,6 +46,11 @@ export function buildPayload(t: PayloadInput) {
 }
 
 type UrlPolicy = { allowPrivate: boolean; appHost: string };
+
+export const urlPolicy = (deps: Deps): UrlPolicy => ({
+  allowPrivate: deps.allowPrivateWebhooks,
+  appHost: new URL(deps.appUrl).host,
+});
 const BLOCKED_SUFFIXES = ['.local', '.internal', '.localhost'];
 
 function parseUrl(raw: string) {
@@ -77,7 +82,7 @@ export function validateWebhookUrl(raw: string, policy: UrlPolicy): string | nul
 const RETRY_SCHEDULE = [10, 10, 20, 30, 50, 3600, 7200, 14400, 28800];
 
 type Delivery = typeof webhookDeliveries.$inferSelect;
-type Outcome = { statusCode: number | null; responseBody: string | null; error: string | null };
+export type Outcome = { statusCode: number | null; responseBody: string | null; error: string | null };
 
 /** Conditional UPDATE as a lease: only one caller wins, a crashed sender is retried after 60s (design §3.2). */
 async function claim(deps: Deps, id: string, trigger: Trigger) {
@@ -106,10 +111,17 @@ async function loadTarget(deps: Deps, transactionId: string) {
   return target;
 }
 
-async function send(deps: Deps, delivery: Delivery, url: string, secretEnc: string): Promise<Outcome> {
-  const body = JSON.stringify(delivery.payload);
+/** One signed POST; never throws for HTTP or network failures, they come back as the outcome. */
+export async function postWebhook(
+  deps: Deps,
+  id: string,
+  payload: unknown,
+  url: string,
+  secretEnc: string,
+): Promise<Outcome> {
+  const body = JSON.stringify(payload);
   const ts = Math.floor(Date.now() / 1000);
-  const signature = await signWebhook(await decryptText(deps.encryptionKey, secretEnc), delivery.id, ts, body);
+  const signature = await signWebhook(await decryptText(deps.encryptionKey, secretEnc), id, ts, body);
   try {
     const res = await deps.fetch(url, {
       method: 'POST',
@@ -119,7 +131,7 @@ async function send(deps: Deps, delivery: Delivery, url: string, secretEnc: stri
       headers: {
         'content-type': 'application/json',
         'user-agent': 'PayMailHook/1.0',
-        'webhook-id': delivery.id,
+        'webhook-id': id,
         'webhook-timestamp': String(ts),
         'webhook-signature': signature,
       },
@@ -153,12 +165,11 @@ export async function deliver(deps: Deps, id: string, trigger: Trigger = 'schedu
   const target = await loadTarget(deps, delivery.transactionId);
   const url = target?.url;
   const secretEnc = target?.secretEnc;
-  const policy = { allowPrivate: deps.allowPrivateWebhooks, appHost: deps.appHost };
-  const blocked = url && secretEnc ? validateWebhookUrl(url, policy) : 'webhook_not_configured';
+  const blocked = url && secretEnc ? validateWebhookUrl(url, urlPolicy(deps)) : 'webhook_not_configured';
   const started = Date.now();
   const outcome: Outcome =
     url && secretEnc && !blocked
-      ? await send(deps, delivery, url, secretEnc)
+      ? await postWebhook(deps, delivery.id, delivery.payload, url, secretEnc)
       : { statusCode: null, responseBody: null, error: blocked };
   await deps.db.insert(webhookAttempts).values({
     deliveryId: delivery.id,

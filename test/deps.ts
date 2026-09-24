@@ -24,7 +24,7 @@ export const makeDeps = (db: Database, overrides: Partial<Deps> = {}) => {
     encryptionKey: TEST_KEY,
     fetch,
     allowPrivateWebhooks: false,
-    appHost: 'app.test',
+    appUrl: 'http://app.test',
     scheduleDelivery: async (id, delay, trigger) => {
       scheduled.push(trigger ? [id, delay, trigger] : [id, delay]);
     },

@@ -5,7 +5,7 @@ import { createDb } from './core/db/client';
 import { webhookDeliveries } from './core/db/schema';
 import type { Deps } from './core/deps';
 import { dohResolveTxt } from './core/dkim';
-import { appHost, parseEnv } from './core/env';
+import { parseEnv } from './core/env';
 import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
 
@@ -22,7 +22,7 @@ const deps: Deps = {
   encryptionKey: env.ENCRYPTION_KEY,
   fetch,
   allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS,
-  appHost: appHost(env),
+  appUrl: env.BETTER_AUTH_URL,
   // ponytail: in-process timers; state lives in the DB and the startup scan below re-arms them.
   scheduleDelivery: async (id, delaySeconds, trigger) => {
     setTimeout(() => deliver(deps, id, trigger).catch(console.error), delaySeconds * 1000);
