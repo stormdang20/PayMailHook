@@ -24,6 +24,7 @@ const deps: Deps = {
   encryptionKey: env.ENCRYPTION_KEY,
   fetch,
   allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS,
+  imapEnabled: true,
   appUrl: env.BETTER_AUTH_URL,
   // ponytail: in-process timers; state lives in the DB and the startup scan below re-arms them.
   scheduleDelivery: async (id, delaySeconds, trigger) => {

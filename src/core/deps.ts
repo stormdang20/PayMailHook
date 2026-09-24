@@ -11,6 +11,8 @@ export type Deps = {
   encryptionKey: string;
   fetch: typeof fetch;
   allowPrivateWebhooks: boolean;
+  /** Self-host only: Workers cannot hold long-lived IMAP connections. */
+  imapEnabled: boolean;
   /** Public origin, e.g. https://paymailhook.example.workers.dev */
   appUrl: string;
   scheduleDelivery: (id: string, delaySeconds: number, trigger?: Trigger) => Promise<void>;

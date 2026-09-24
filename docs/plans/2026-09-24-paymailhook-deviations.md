@@ -556,3 +556,15 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 
 - Needs a Gmail App Password; listed in the user setup checklist. Unit tests cover `scan()` (once per email, retry after a failed ingest, the Gmail query) and the auth-failure stop.
 - `imapflow` is imported only by `src/server.ts`; the Worker bundle does not contain it (checked).
+
+## Task 2.8: UI for the IMAP source
+
+### 2.8-a: IMAP only where it can run
+
+- `Deps.imapEnabled` is `true` on the Bun server and `false` on Workers (no long-lived TCP connections there). The API answers `400 imap_not_available` for `source: 'imap'` on Hosted, and `GET /api/config` returns `imap` so the SPA only offers the choice in Self-host.
+
+### 2.8-b: App Password handling
+
+- Accepted with or without the spaces Google shows (`abcd efgh ijkl mnop`), validated as 16 letters, stored with AES-GCM (`encryptText`). Responses only carry `hasImapPassword`; tests search every response body for the password and its ciphertext.
+- A new password clears `ingest_error` (e.g. `imap_auth_failed`), so `superviseImap` restarts the listener within a minute (2.7-a).
+- For IMAP configs, creation returns `appsScript: null`; the ingest token is still generated (the column is `NOT NULL`, and switching back to Apps Script later only needs a token rotation).

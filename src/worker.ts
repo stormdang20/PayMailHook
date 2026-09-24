@@ -23,6 +23,7 @@ function makeDeps(bindings: Bindings, waitUntil?: WaitUntil): Deps {
     encryptionKey: env.ENCRYPTION_KEY,
     fetch: fetch.bind(globalThis),
     allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS,
+    imapEnabled: false,
     appUrl: env.BETTER_AUTH_URL,
     scheduleDelivery: async (id, delaySeconds, trigger = 'scheduled') => {
       await bindings.QUEUE.send({ id, trigger }, { delaySeconds: Math.ceil(delaySeconds) });

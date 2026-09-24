@@ -30,7 +30,7 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
   const onError = (e: unknown) => toast.error(errorMessage(e));
 
   const save = useMutation({
-    mutationFn: (json: { webhookUrl: string | null; orderPrefix: string }) =>
+    mutationFn: (json: { webhookUrl: string | null; orderPrefix: string; imapPassword?: string }) =>
       parseResponse(byId.$patch({ param, json })),
     onSuccess: () => {
       toast.success('Đã lưu');
@@ -70,7 +70,12 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const webhookUrl = String(form.get('webhookUrl')).trim();
-    save.mutate({ webhookUrl: webhookUrl || null, orderPrefix: String(form.get('orderPrefix')).trim() });
+    const imapPassword = String(form.get('imapPassword') ?? '').trim();
+    save.mutate({
+      webhookUrl: webhookUrl || null,
+      orderPrefix: String(form.get('orderPrefix')).trim(),
+      ...(imapPassword && { imapPassword }),
+    });
   }
 
   return (
@@ -131,6 +136,17 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
           <Button type="submit" disabled={save.isPending}>
             Lưu
           </Button>
+          {config.source === 'imap' && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor={`imap-${config.id}`}>App Password mới (để trống nếu không đổi)</Label>
+              <Input
+                id={`imap-${config.id}`}
+                name="imapPassword"
+                autoComplete="off"
+                placeholder="abcd efgh ijkl mnop"
+              />
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>

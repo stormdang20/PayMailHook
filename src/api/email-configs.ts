@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { renderAppsScript } from '../core/apps-script';
@@ -18,6 +18,7 @@ const publicColumns = {
   webhookUrl: emailConfigs.webhookUrl,
   lastIngestAt: emailConfigs.lastIngestAt,
   ingestError: emailConfigs.ingestError,
+  hasImapPassword: sql<boolean>`${emailConfigs.imapPasswordEnc} is not null`,
   createdAt: emailConfigs.createdAt,
 };
 
@@ -27,6 +28,11 @@ const orderPrefix = z
   .regex(/^[A-Za-z0-9]{1,16}$/)
   .transform((s) => s.toUpperCase());
 const webhookUrl = z.string().max(2048).nullable();
+// Google shows App Passwords as "abcd efgh ijkl mnop"; accept it pasted with or without spaces.
+const imapPassword = z
+  .string()
+  .transform((s) => s.replace(/\s/g, ''))
+  .pipe(z.string().regex(/^[A-Za-z]{16}$/, 'App Password is 16 letters'));
 const idParam = validate('param', z.object({ id: z.uuid() }));
 
 const owned = (userId: string, id: string) => and(eq(emailConfigs.id, id), eq(emailConfigs.userId, userId));
@@ -63,15 +69,20 @@ export const emailConfigRoutes = new Hono<AppEnv>()
     '/',
     validate(
       'json',
-      z.object({
-        gmail: z.email().transform((s) => s.trim().toLowerCase()),
-        webhookUrl: webhookUrl.optional(),
-        orderPrefix: orderPrefix.optional(),
-      }),
+      z
+        .object({
+          gmail: z.email().transform((s) => s.trim().toLowerCase()),
+          webhookUrl: webhookUrl.optional(),
+          orderPrefix: orderPrefix.optional(),
+          source: z.enum(['apps_script', 'imap']).default('apps_script'),
+          imapPassword: imapPassword.optional(),
+        })
+        .refine((b) => b.source !== 'imap' || b.imapPassword, { path: ['imapPassword'], message: 'required for imap' }),
     ),
     async (c) => {
       const { deps } = c.var;
-      const body = c.req.valid('json');
+      const { imapPassword, ...body } = c.req.valid('json');
+      if (body.source === 'imap' && !deps.imapEnabled) return c.json({ error: { code: 'imap_not_available' } }, 400);
       const reason = urlError(deps, body.webhookUrl);
       if (reason) return c.json(badUrl(reason), 400);
       const { token, hash } = await newToken();
@@ -83,10 +94,12 @@ export const emailConfigRoutes = new Hono<AppEnv>()
           userId: c.var.user.id,
           ingestTokenHash: hash,
           webhookSecretEnc: await encryptText(deps.encryptionKey, webhookSecret),
+          imapPasswordEnc: imapPassword ? await encryptText(deps.encryptionKey, imapPassword) : null,
         })
         .returning(publicColumns);
       // Shown once: only the hash and the encrypted secret are stored.
-      return c.json({ config, ingestToken: token, webhookSecret, appsScript: appsScriptFor(deps, token) }, 201);
+      const appsScript = body.source === 'apps_script' ? appsScriptFor(deps, token) : null;
+      return c.json({ config, ingestToken: token, webhookSecret, appsScript }, 201);
     },
   )
   .get('/:id', idParam, async (c) => {
@@ -99,15 +112,26 @@ export const emailConfigRoutes = new Hono<AppEnv>()
   .patch(
     '/:id',
     idParam,
-    validate('json', z.object({ webhookUrl: webhookUrl.optional(), orderPrefix: orderPrefix.optional() })),
+    validate(
+      'json',
+      z.object({
+        webhookUrl: webhookUrl.optional(),
+        orderPrefix: orderPrefix.optional(),
+        imapPassword: imapPassword.optional(),
+      }),
+    ),
     async (c) => {
       const { deps } = c.var;
-      const body = c.req.valid('json');
+      const { imapPassword, ...body } = c.req.valid('json');
       const reason = urlError(deps, body.webhookUrl);
       if (reason) return c.json(badUrl(reason), 400);
+      // A new App Password clears imap_auth_failed, which lets superviseImap start the listener again.
+      const password = imapPassword
+        ? { imapPasswordEnc: await encryptText(deps.encryptionKey, imapPassword), ingestError: null }
+        : {};
       const [config] = await deps.db
         .update(emailConfigs)
-        .set(body)
+        .set({ ...body, ...password })
         .where(owned(c.var.user.id, c.req.valid('param').id))
         .returning(publicColumns);
       return config ? c.json(config) : c.json(notFound, 404);

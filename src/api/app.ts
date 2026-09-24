@@ -41,7 +41,10 @@ export function createApp(makeDeps: (c: Context) => Deps) {
     app
       // Public: lets the SPA show only sign-in buttons that can work (like react-starter-kit).
       .get('/api/config', (c) =>
-        c.json({ socialProviders: Object.keys(c.var.deps.auth.options.socialProviders ?? {}) }),
+        c.json({
+          socialProviders: Object.keys(c.var.deps.auth.options.socialProviders ?? {}),
+          imap: c.var.deps.imapEnabled,
+        }),
       )
       .get('/api/me', async (c) => {
         const [me] = await c.var.deps.db

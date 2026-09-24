@@ -63,5 +63,5 @@ test('ingest stays public (token-authenticated, no session)', async () => {
 
 test('public config lists configured social providers', async () => {
   const res = await app.request('/api/config');
-  expect(await json(res)).toEqual({ socialProviders: [] });
+  expect(await json(res)).toEqual({ socialProviders: [], imap: false });
 });
