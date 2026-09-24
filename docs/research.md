@@ -1,46 +1,46 @@
 # Research notes
 
-Tài liệu này tổng hợp những gì học được từ payhook.codes, từ email mẫu thật, từ các repo open-source và từ các spike. Các quyết định rút ra được ghi trong [README](../README.md#quyết-định-đã-chốt).
+This document collects what we learned from payhook.codes, real sample emails, open-source repos and spikes. The resulting decisions are recorded in the [README](../README.md#decisions).
 
 ## 1. payhook.codes
 
-Thông tin lấy từ bundle JS và trang hướng dẫn công khai.
+Gathered from the JS bundle and the public guide pages.
 
-- **Kết nối Gmail:** Gmail OAuth với scope `gmail.readonly`, gọi `users.watch` rồi nhận Pub/Sub push. Watch hết hạn sau 7 ngày nên họ có scheduler tự gia hạn. App chưa được Google verify.
-- **Khớp đơn hàng:** chỉ bắn webhook khi nội dung chuyển khoản chứa `PAYHOOK{orderId}`.
+- **Gmail connection:** Gmail OAuth with the `gmail.readonly` scope, calls `users.watch` and receives Pub/Sub push. The watch expires after 7 days, so they run a scheduler that renews it. The app is not verified by Google.
+- **Order matching:** a webhook fires only when the transfer description contains `PAYHOOK{orderId}`.
 - **Payload:** `event: "transaction.detected"`, `orderId`, `transaction{transactionId, bank, amountVND, description}`.
-- **Chữ ký:** `X-Payhook-Signature` (HMAC-SHA256) và `X-Payhook-Timestamp`. Mỗi cấu hình có một secret riêng, chỉ hiện một lần.
-- **Retry:** 5 lần theo Fibonacci (10s, 10s, 20s, 30s, 50s), sau đó vào DLQ và retry sau 1h, 2h, 4h, 8h. Log giữ 30 ngày. Endpoint nhận phải trả lời trong 10s.
-- **Chống SSRF:** bắt buộc HTTPS và domain, không dùng IP/localhost/IP nội bộ, chỉ port 80/443.
-- **API:** `/api/auth/{login,register,refresh,google}`, `/api/email-configs` (CRUD, `send-test-email`), `/api/transactions`, `/api/webhook-logs`, `/api/users` (role, `me/api-key`), `/api/push/*`, `/api/qr/img`, `/api/share/transactions`, cùng các trang MCP/Xiaozhi.
+- **Signature:** `X-Payhook-Signature` (HMAC-SHA256) and `X-Payhook-Timestamp`. Each config has its own secret, shown only once.
+- **Retry:** 5 attempts on a Fibonacci schedule (10s, 10s, 20s, 30s, 50s), then into a DLQ with retries after 1h, 2h, 4h, 8h. Logs are kept 30 days. The receiving endpoint must respond within 10s.
+- **SSRF protection:** HTTPS and a domain are required; no IP/localhost/internal IPs; ports 80/443 only.
+- **API:** `/api/auth/{login,register,refresh,google}`, `/api/email-configs` (CRUD, `send-test-email`), `/api/transactions`, `/api/webhook-logs`, `/api/users` (role, `me/api-key`), `/api/push/*`, `/api/qr/img`, `/api/share/transactions`, plus MCP/Xiaozhi pages.
 
-## 2. Định dạng email (từ `mail-template/`, đã gitignore)
+## 2. Email format (from `mail-template/`, gitignored)
 
 | | CAKE | Timo |
 |---|---|---|
-| Người gửi | `no-reply@cake.vn` (gửi qua Amazon SES) | `support@timo.vn` |
-| DKIM | `d=cake.vn` và `d=amazonses.com`, ký cả `To` | `d=timo.vn`, key RSA 1024-bit, ký cả `To`, DMARC `p=QUARANTINE` |
-| Body | Chỉ có HTML, dạng bảng label/value, **một template cho cả tiền vào lẫn tiền ra** | Chỉ có HTML, dạng câu văn |
-| Số tiền, chiều | `Số tiền: +149.000 đ` / `-149.001 đ` | `vừa tăng/giảm 2.570.000 VND` |
-| Mã giao dịch | `Mã giao dịch` | **Không có** |
-| Số tài khoản | Dòng có `- Tài khoản thanh toán` là TK của mình; TK bên kia bị che (`123456***7890`) | **Không có** |
-| Thời gian | `20/09/2026, 18:30:57` | `16/09/2026 09:49` |
-| Nội dung chuyển khoản | `Nội dung giao dịch` (ví dụ `PAYHOOK123456`, giữ nguyên) | `Mô tả:` (ngân hàng bên chuyển có thể chèn tiền tố, ví dụ `MBVCB.<ref>.<nội dung>…`) |
-| Số dư | Không có | `Số dư hiện tại` |
+| Sender | `no-reply@cake.vn` (sent via Amazon SES) | `support@timo.vn` |
+| DKIM | `d=cake.vn` and `d=amazonses.com`, `To` is signed | `d=timo.vn`, 1024-bit RSA key, `To` is signed, DMARC `p=QUARANTINE` |
+| Body | HTML only, label/value table, **one template for both incoming and outgoing** | HTML only, prose sentences |
+| Amount, direction | `Số tiền: +149.000 đ` / `-149.001 đ` | `vừa tăng/giảm 2.570.000 VND` |
+| Transaction ID | `Mã giao dịch` | **None** |
+| Account number | The row containing `- Tài khoản thanh toán` is our own account; the counterparty account is masked (`123456***7890`) | **None** |
+| Time | `20/09/2026, 18:30:57` | `16/09/2026 09:49` |
+| Transfer description | `Nội dung giao dịch` (e.g. `PAYHOOK123456`, kept as-is) | `Mô tả:` (the sending bank may insert a prefix, e.g. `MBVCB.<ref>.<description>…`) |
+| Balance | None | `Số dư hiện tại` |
 
-Mã đơn hàng chỉ nên dùng `[A-Z0-9]` và được tìm bằng regex ở bất kỳ vị trí nào trong nội dung.
+Order IDs should use only `[A-Z0-9]` and are found by regex anywhere in the description.
 
-## 3. Spike: verify DKIM
+## 3. Spike: DKIM verification
 
-- **Cách chạy:** dùng `mailauth/lib/dkim/verify` (**không** dùng entry `mailauth`) với resolver DNS-over-HTTPS (`cloudflare-dns.com/dns-query`). Bundle cho Workers thành công (`wrangler deploy --dry-run`), khoảng 467KB sau gzip.
-- **Entry chính của `mailauth` không bundle được:** nó kéo theo `undici`, mà `undici` import `node:sqlite`.
-- **Kết quả với CAKE:** pass (`cake.vn` và `amazonses.com`).
-- **Kết quả với Timo:** fail với file tải về, và `dkimpy` cũng cho kết quả giống hệt. **Nguyên nhân:** Timo gửi email không có header `Date`, Gmail tự thêm `Date: … -0700 (PDT)` khi nhận. Vì `h=` của DKIM có ký `Date` ở trạng thái rỗng, header thêm vào làm chữ ký hỏng. Bỏ `Date` đi thì cả 4 mẫu đều pass.
-  - **Cách xử lý:** nếu verify thất bại, thử lại một lần sau khi bỏ header `Date`. Làm vậy vẫn an toàn vì hệ thống không tin `Date`: thời điểm giao dịch lấy từ body, mà body đã được ký.
-  - **Chưa kiểm tra được:** email auto-forward sang Cloudflare có y hệt file tải về hay không. Cần spike trên Cloudflare thật.
-- **Môi trường dev:** máy dev dùng glibc 2.31, không chạy được `workerd` (nó cần ≥2.32), và wrangler cần Node ≥22. Vì vậy local dev chạy trên Bun, còn `wrangler deploy` chỉ cần bước bundle.
+- **Approach:** use `mailauth/lib/dkim/verify` (**not** the `mailauth` entry) with a DNS-over-HTTPS resolver (`cloudflare-dns.com/dns-query`). Bundling for Workers succeeds (`wrangler deploy --dry-run`), about 467KB gzipped.
+- **The main `mailauth` entry does not bundle:** it pulls in `undici`, which imports `node:sqlite`.
+- **CAKE result:** pass (`cake.vn` and `amazonses.com`).
+- **Timo result:** fails on the downloaded file, and `dkimpy` gives the identical result. **Cause:** Timo sends email without a `Date` header, and Gmail adds `Date: … -0700 (PDT)` on receipt. Because DKIM `h=` signs `Date` in its empty state, the added header breaks the signature. With `Date` removed, all 4 samples pass.
+  - **Handling:** if verification fails, retry once after removing the `Date` header. This is still safe because the system does not trust `Date`: the transaction time comes from the body, and the body is signed.
+  - **Not yet verified:** whether email auto-forwarded to Cloudflare is identical to the downloaded file. Needs a spike on real Cloudflare.
+- **Dev environment:** the dev machine has glibc 2.31 and cannot run `workerd` (needs ≥2.32), and wrangler needs Node ≥22. So local dev runs on Bun, and `wrangler deploy` only needs the bundle step.
 
-## 4. Repo tham khảo (`repo-ref/`, đã gitignore)
+## 4. Reference repos (`repo-ref/`, gitignored)
 
 ```bash
 mkdir -p repo-ref && cd repo-ref
@@ -53,26 +53,26 @@ for r in dreamhunter2333/cloudflare_temp_email choyiny/saasmail cloudflare/agent
 done; wait
 ```
 
-| Repo | ★ | Học được gì | Cẩn thận |
+| Repo | ★ | What we learned | Caveats |
 |---|---|---|---|
-| **saasmail** | 253 | Stack gần giống nhất: một Worker export `fetch`, `email`, `queue`, `scheduled`, dùng assets `run_worker_first`. Chuỗi middleware injectDb → session hoặc API key → role guard. Mẫu MCP dùng `@hono/mcp` và bọc mỗi tool bằng `guard(scope)`. API key `sk_` lưu dạng SHA-256. Web Push theo chuẩn VAPID. Retry kiểu outbox dùng UPDATE có điều kiện | Chỉ single-tenant, dùng D1. Webhook không có retry. Không có `onError`. DDL trong test chép tay nên lệch với schema thật |
-| **cloudflare_temp_email** | 11.8k | Handler `email()`: parse một lần và cache lại; mỗi side effect có try/catch riêng; xoá dữ liệu cũ theo batch có `LIMIT` bằng cron; test bằng một `ForwardableEmailMessage` giả (`e2e/fixtures/mail-api.ts`) | Chỉ đọc `Authentication-Results`, có thể bị giả. Webhook gọi inline, không retry |
-| **agentic-inbox** | 8k | Handler `email()` giới hạn 25MB và **throw** khi có lỗi tạm thời để Cloudflare retry (`setReject` thì bounce luôn) | Dùng Durable Object và R2, không hợp với Postgres |
-| **react-starter-kit** | 23.7k | Tách Hono app không phụ thuộc runtime (`lib/app.ts`) khỏi `worker.ts` và `dev.ts`. Dùng Neon qua Hyperdrive với `postgres(max:1)`. Kiểu `Database` không phụ thuộc driver. Test DB bằng PGlite chạy migration thật. `secrets.required` trong wrangler | Chia 3 Worker, tRPC, Terraform: quá nặng cho mình |
-| vmail | 1.5k | Một Worker với fallback SPA. Rate limit API key theo cửa sổ cố định | Comment trong code nói `setReject` sẽ retry, điều đó sai |
-| svix-webhooks | 3.4k | Chuẩn ký `id.ts.body` → `v1,<b64>`, sai lệch timestamp tối đa 5 phút, danh sách chặn SSRF `is_allowed()`, xử lý `Retry-After` | Viết bằng Rust, chỉ đọc để học |
-| outpost / convoy | | `ScheduledBackoff` (lịch retry cố định), state machine của delivery, xoá log theo retention | Viết bằng Go |
-| inbox-zero / gmailpush | | Gmail `watch`, Pub/Sub, `history.list`, nếu sau này cần thêm OAuth | |
-| my-money-went-bot | 5 | Parser CAKE (`handlers/email_parser.py`) | Xử lý cả forward tay, việc mà hệ thống này không hỗ trợ |
-| mailauth / postal-mime / mailparser | | Verify DKIM/ARC, parse MIME (postal-mime chạy được trên Workers) | Xem mục 3 |
-| vietnam-qr-pay | 173 | Encode VietQR theo EMVCo và CRC16 | |
-| laravel-sepay | 24 | Contract webhook quen thuộc ở thị trường VN, dedupe theo `id` | Throw lỗi khi gặp bản trùng. Mình nên dặn phía nhận trả 2xx khi trùng |
+| **saasmail** | 253 | Closest stack: one Worker exporting `fetch`, `email`, `queue`, `scheduled`, using assets `run_worker_first`. Middleware chain injectDb → session or API key → role guard. MCP pattern uses `@hono/mcp` and wraps each tool in `guard(scope)`. `sk_` API keys stored as SHA-256. Web Push per the VAPID standard. Outbox-style retry using a conditional UPDATE | Single-tenant only, uses D1. Webhooks have no retry. No `onError`. DDL in tests is hand-copied, so it drifts from the real schema |
+| **cloudflare_temp_email** | 11.8k | `email()` handler: parse once and cache; each side effect has its own try/catch; cron deletes old data in batches with `LIMIT`; tests use a fake `ForwardableEmailMessage` (`e2e/fixtures/mail-api.ts`) | Only reads `Authentication-Results`, which can be spoofed. Webhooks are called inline, no retry |
+| **agentic-inbox** | 8k | `email()` handler caps at 25MB and **throws** on transient errors so Cloudflare retries (`setReject` bounces immediately) | Uses Durable Objects and R2, not a fit for Postgres |
+| **react-starter-kit** | 23.7k | Separates a runtime-agnostic Hono app (`lib/app.ts`) from `worker.ts` and `dev.ts`. Uses Neon via Hyperdrive with `postgres(max:1)`. Driver-agnostic `Database` type. DB tests use PGlite running real migrations. `secrets.required` in wrangler | Split into 3 Workers, tRPC, Terraform: too heavy for us |
+| vmail | 1.5k | One Worker with SPA fallback. Fixed-window API key rate limiting | A code comment says `setReject` will retry, which is wrong |
+| svix-webhooks | 3.4k | Signing scheme `id.ts.body` → `v1,<b64>`, max 5-minute timestamp tolerance, SSRF blocklist `is_allowed()`, `Retry-After` handling | Written in Rust, read-only reference |
+| outpost / convoy | | `ScheduledBackoff` (fixed retry schedule), delivery state machine, log deletion by retention | Written in Go |
+| inbox-zero / gmailpush | | Gmail `watch`, Pub/Sub, `history.list`, if OAuth is needed later | |
+| my-money-went-bot | 5 | CAKE parser (`handlers/email_parser.py`) | Also handles manual forwards, which this system does not support |
+| mailauth / postal-mime / mailparser | | DKIM/ARC verification, MIME parsing (postal-mime runs on Workers) | See section 3 |
+| vietnam-qr-pay | 173 | VietQR encoding per EMVCo with CRC16 | |
+| laravel-sepay | 24 | Webhook contract familiar in the VN market, dedupe by `id` | Throws on duplicates. We should tell receivers to return 2xx on duplicates |
 
-## 5. Những lưu ý rút ra
+## 5. Takeaways
 
-- `message.setReject()` bounce email vĩnh viễn. Khi gặp lỗi tạm thời (ví dụ DB sập) thì phải **throw** để Cloudflare retry.
-- Chỉ đọc `Authentication-Results` thì không đủ an toàn, vì header này có thể bị giả. Phải tự verify DKIM bằng mật mã, và cố định `d=` là domain của ngân hàng.
-- Workers không cho kiểm soát DNS hay socket, nên không chặn được DNS rebinding. Chỉ làm được: kiểm tra URL khi lưu và trước mỗi lần gửi, tuỳ chọn tra DoH để chặn IP private, và dùng `redirect: 'manual'`.
-- Secret webhook phải lưu **dạng mã hoá** (AES-GCM với một secret của Worker), không lưu dạng hash, vì cần secret gốc để ký.
-- Không repo nào xử lý email xác nhận forwarding của Gmail (`forwarding-noreply@google.com`), nên phải tự làm phần này.
-- Route `/.well-known/*` và `/mcp` phải đăng ký trước route catch-all của SPA.
+- `message.setReject()` bounces the email permanently. On transient errors (e.g. DB down) you must **throw** so Cloudflare retries.
+- Reading only `Authentication-Results` is not safe enough, since the header can be spoofed. DKIM must be verified cryptographically, with `d=` pinned to the bank's domain.
+- Workers give no control over DNS or sockets, so DNS rebinding cannot be blocked. What we can do: validate the URL on save and before each send, optionally look up via DoH to block private IPs, and use `redirect: 'manual'`.
+- Webhook secrets must be stored **encrypted** (AES-GCM with a Worker secret), not hashed, because the original secret is needed for signing.
+- No repo handles Gmail's forwarding confirmation email (`forwarding-noreply@google.com`), so we have to build this ourselves.
+- `/.well-known/*` and `/mcp` routes must be registered before the SPA catch-all route.

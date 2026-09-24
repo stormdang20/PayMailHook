@@ -1,68 +1,68 @@
 # Design
 
-Tài liệu thiết kế chi tiết. Các quyết định cấp cao (D1…D17) nằm trong [README](../README.md#quyết-định-đã-chốt), còn nghiên cứu nền tảng nằm trong [research.md](research.md).
+Detailed design document. High-level decisions (D1…D17) live in the [README](../README.md#decisions); background research lives in [research.md](research.md).
 
-Trạng thái từng phần: ✅ đã duyệt · 📝 đang review
+Status of each section: ✅ approved · 📝 in review
 
 ---
 
-## 1. Schema DB ✅
+## 1. DB schema ✅
 
-Postgres, Drizzle `pg-core`. Tiền dùng `bigint` với đơn vị VND (không có số lẻ). Thời gian dùng `timestamptz`.
+Postgres, Drizzle `pg-core`. Money is `bigint` in VND (no fractional part). Times are `timestamptz`.
 
-**Bảng auth** (`user`, `session`, `account`, `verification`, `apikey`) được CLI của better-auth **sinh tự động** (`auth generate`), không viết tay. Admin plugin thêm cột `user.role`. Các bảng nghiệp vụ tham chiếu tới `user.id`, kiểu `text`.
+**Auth tables** (`user`, `session`, `account`, `verification`, `apikey`) are **generated** by the better-auth CLI (`auth generate`), not hand-written. The admin plugin adds the `user.role` column. Business tables reference `user.id`, type `text`.
 
-**Multi-tenant:** mọi bảng nghiệp vụ đều có `user_id`. Mọi query phía dashboard/API chỉ lọc qua **một** điều kiện `user_id = ?`. Không dùng RLS, vì chỉ có một role DB.
+**Multi-tenant:** every business table has `user_id`. Every dashboard/API query filters on **a single** condition, `user_id = ?`. No RLS, since there is only one DB role.
 
 ```
-email_configs                        -- mỗi dòng ứng với 1 Gmail; webhook gắn theo config (giống payhook)
+email_configs                        -- one row per Gmail; webhook is attached per config (like payhook)
   id uuid pk default gen_random_uuid()
   user_id text → user.id on delete cascade
-  gmail text                         -- lowercase; phải khớp header To đã được DKIM ký (D6)
-                                     -- UNIQUE một phần: WHERE last_ingest_at IS NOT NULL (xem 4.4, chống chiếm chỗ Gmail)
-  source enum(apps_script, imap)     -- gmail_oauth sẽ thêm ở P4 bằng migration
-  ingest_token_hash text UNIQUE      -- sha256 của Bearer token mà Apps Script gửi lên
-  imap_password_enc text null        -- App Password mã hoá AES-GCM, chỉ dùng khi source = imap
-  last_ingest_at timestamptz null    -- dashboard hiện "script còn chạy không"
-  ingest_error text null             -- lỗi gần nhất (IMAP auth fail, DKIM fail…), hiện trên dashboard
+  gmail text                         -- lowercase; must match the DKIM-signed To header (D6)
+                                     -- partial UNIQUE: WHERE last_ingest_at IS NOT NULL (see 4.4, prevents Gmail squatting)
+  source enum(apps_script, imap)     -- gmail_oauth added in P4 via migration
+  ingest_token_hash text UNIQUE      -- sha256 of the Bearer token sent by Apps Script
+  imap_password_enc text null        -- AES-GCM encrypted App Password, only used when source = imap
+  last_ingest_at timestamptz null    -- dashboard shows "is the script still running"
+  ingest_error text null             -- latest error (IMAP auth fail, DKIM fail…), shown on the dashboard
   order_prefix text default 'PMH'
   webhook_url text null
-  webhook_secret_enc text null       -- whsec_… mã hoá AES-GCM (cần secret gốc để ký nên không hash được)
+  webhook_secret_enc text null       -- whsec_… AES-GCM encrypted (signing needs the original secret, so it can't be hashed)
   created_at, updated_at
 
 transactions
   id uuid pk
-  user_id text → user.id             -- lặp lại từ email_configs để lọc bằng một điều kiện
+  user_id text → user.id             -- duplicated from email_configs so filtering needs one condition
   email_config_id uuid → email_configs on delete cascade
-  message_id text UNIQUE             -- dedupe (D5); Apps Script và IMAP có quét trùng cũng không sao
+  message_id text UNIQUE             -- dedupe (D5); overlapping Apps Script and IMAP scans are harmless
   bank enum(CAKE, TIMO)
   direction enum(in, out)
-  amount bigint                      -- luôn dương
-  balance_after bigint null          -- chỉ Timo có
-  bank_txn_id text null              -- chỉ CAKE có
+  amount bigint                      -- always positive
+  balance_after bigint null          -- Timo only
+  bank_txn_id text null              -- CAKE only
   description text
-  order_id text null                 -- mã đơn khớp được (đã bỏ prefix)
+  order_id text null                 -- matched order code (prefix stripped)
   counterparty_name text null
   counterparty_account text null
   counterparty_bank text null
-  occurred_at timestamptz            -- lấy từ body, theo giờ Asia/Ho_Chi_Minh
+  occurred_at timestamptz            -- taken from the body, in Asia/Ho_Chi_Minh time
   created_at
   index (user_id, occurred_at desc)
 
-webhook_deliveries                   -- một delivery cho mỗi transaction có order_id
-  id uuid pk                         -- dùng làm header webhook-id (idempotency)
+webhook_deliveries                   -- one delivery per transaction with an order_id
+  id uuid pk                         -- used as the webhook-id header (idempotency)
   user_id text
   transaction_id uuid UNIQUE → transactions on delete cascade
-  payload jsonb                      -- body cố định; retry và resend gửi lại y hệt
+  payload jsonb                      -- fixed body; retries and resends send it unchanged
   status enum(pending, retrying, success, failed)
   attempt_count int default 0
   next_attempt_at timestamptz null
   last_status_code int null
   created_at, updated_at
-  index (status, next_attempt_at)    -- cho cron quét delivery bị kẹt
+  index (status, next_attempt_at)    -- for the cron that scans stuck deliveries
   index (user_id, created_at desc)
 
-webhook_attempts                     -- log trên dashboard; cron xoá bản ghi quá 30 ngày
+webhook_attempts                     -- dashboard log; cron deletes records older than 30 days
   id uuid pk
   delivery_id uuid → webhook_deliveries on delete cascade
   attempt_number int
@@ -70,37 +70,37 @@ webhook_attempts                     -- log trên dashboard; cron xoá bản ghi
   url text
   status_code int null
   error text null
-  response_body text null            -- cắt còn tối đa 1KB
+  response_body text null            -- truncated to at most 1KB
   duration_ms int
   created_at
   index (delivery_id)
 
-inbound_failures                     -- email của config đã biết nhưng DKIM hoặc parse fail (D15); xoá sau 7 ngày
+inbound_failures                     -- emails for a known config that failed DKIM or parsing (D15); deleted after 7 days
   id uuid pk
   email_config_id uuid → email_configs on delete cascade
   message_id text null
   reason text                        -- dkim_failed | to_mismatch | unknown_sender | parse_failed
-  raw_enc bytea                      -- raw MIME mã hoá AES-GCM, để viết thêm parser khi ngân hàng đổi template
+  raw_enc bytea                      -- AES-GCM encrypted raw MIME, for writing new parsers when a bank changes its template
   created_at
 ```
 
-**Chưa làm, thêm khi cần:**
+**Not yet, add when needed:**
 - `push_subscriptions` (P4).
-- `transactions.share_token` (P3, khi đã chốt link chia sẻ là cho một giao dịch hay cả danh sách).
-- Trạng thái IMAP (UID cuối cùng đã đọc): không cần, vì mỗi lần kết nối lại chỉ cần quét `SINCE` hôm nay, còn `message_id UNIQUE` lo phần dedupe.
+- `transactions.share_token` (P3, once it is decided whether a share link covers one transaction or the whole list).
+- IMAP state (last UID read): not needed, since each reconnect only has to scan `SINCE` today, and `message_id UNIQUE` handles dedupe.
 
-**Không làm:**
-- Bảng `endpoints` riêng, vì mỗi config chỉ có một URL.
-- Bảng `events` tách khỏi `deliveries`, vì mỗi giao dịch chỉ có một đích nhận.
+**Won't do:**
+- A separate `endpoints` table, since each config has only one URL.
+- An `events` table separate from `deliveries`, since each transaction has only one destination.
 - RLS.
 
 ---
 
-## 2. Luồng nhận và xử lý email ✅
+## 2. Email ingestion and processing flow ✅
 
-Học từ: `my-money-went-bot/google_apps_script.js` (dedupe theo message, không theo thread; chỉ tính thành công khi có ack), `agentic-inbox` (lỗi tạm thời thì throw/5xx để bên gửi thử lại, lỗi vĩnh viễn thì ack), `cloudflare_temp_email` (parse một lần, mỗi side effect có try/catch riêng), `imapflow` (IDLE, `gmraw`).
+Learned from: `my-money-went-bot/google_apps_script.js` (dedupe per message, not per thread; count as success only on ack), `agentic-inbox` (transient errors throw/5xx so the sender retries, permanent errors ack), `cloudflare_temp_email` (parse once, each side effect gets its own try/catch), `imapflow` (IDLE, `gmraw`).
 
-### 2.1 Ba nguồn, một hàm core
+### 2.1 Three sources, one core function
 
 ```
 Apps Script ── POST /api/ingest ──┐
@@ -108,24 +108,24 @@ IMAP IDLE (Self-host) ────────────┼──► ingestRaw
 Gmail OAuth (P4) ─────────────────┘
 ```
 
-Mỗi nguồn chỉ làm hai việc: **xác định `email_config`** và **lấy raw MIME**. Mọi xử lý còn lại nằm trong `src/core/ingest.ts`.
+Each source does only two things: **identify the `email_config`** and **fetch the raw MIME**. All remaining processing lives in `src/core/ingest.ts`.
 
-### 2.2 `ingestRawEmail`, từng bước
+### 2.2 `ingestRawEmail`, step by step
 
-| # | Bước | Nếu lỗi |
+| # | Step | On failure |
 |---|---|---|
-| 1 | Kiểm tra kích thước ≤ 2MB (email ngân hàng khoảng 6–40KB) | `rejected: too_large` |
-| 2 | `postal-mime` parse headers và HTML **một lần** | `rejected: malformed` |
-| 3 | Tra `From` trong `BANKS` để biết ngân hàng | `ignored` (không lưu, vì query phía nguồn đã lọc theo người gửi) |
-| 4 | `To` chứa `config.gmail`. So sánh sau khi chuẩn hoá Gmail: lowercase, bỏ dấu `.` và phần `+tag` ở local part, coi `googlemail.com` như `gmail.com` | `rejected: to_mismatch` |
-| 5 | Verify DKIM (xem 2.3) | `rejected: dkim_failed` |
+| 1 | Check size ≤ 2MB (bank emails are about 6–40KB) | `rejected: too_large` |
+| 2 | `postal-mime` parses headers and HTML **once** | `rejected: malformed` |
+| 3 | Look up `From` in `BANKS` to identify the bank | `ignored` (not stored, since the source-side query already filters by sender) |
+| 4 | `To` contains `config.gmail`. Compare after Gmail normalization: lowercase, strip `.` and the `+tag` part of the local part, treat `googlemail.com` as `gmail.com` | `rejected: to_mismatch` |
+| 5 | Verify DKIM (see 2.3) | `rejected: dkim_failed` |
 | 6 | `bank.parse(html)` → `ParsedTxn` | `rejected: parse_failed` |
-| 7 | Trong **một DB transaction**: `INSERT transactions … ON CONFLICT (message_id) DO NOTHING`. Nếu có dòng mới, `direction = in`, khớp được mã đơn và config có `webhook_url`, thì `INSERT webhook_deliveries (status=pending, next_attempt_at=now)` | Không có dòng nào được chèn → `duplicate` |
-| 8 | Sau khi commit: `scheduleDelivery(id)` | Lỗi thì cron mỗi giờ sẽ nhặt lại (vì delivery vẫn `pending`) |
+| 7 | In **one DB transaction**: `INSERT transactions … ON CONFLICT (message_id) DO NOTHING`. If a new row was inserted, `direction = in`, an order code matched, and the config has a `webhook_url`, then `INSERT webhook_deliveries (status=pending, next_attempt_at=now)` | No row inserted → `duplicate` |
+| 8 | After commit: `scheduleDelivery(id)` | On failure the hourly cron picks it up again (the delivery is still `pending`) |
 | 9 | `UPDATE email_configs SET last_ingest_at = now(), ingest_error = null` | |
 
-- **Các trường hợp `rejected`** ở bước 4, 5, 6: ghi vào `inbound_failures` (raw mã hoá, `reason`) và `ingest_error`. Đây là **lỗi vĩnh viễn**, nên vẫn trả ack để nguồn không gửi lại mãi.
-- **Lỗi hạ tầng** (DB hoặc DNS lỗi) thì throw. `/api/ingest` trả **503**, và nguồn sẽ thử lại ở lần chạy sau.
+- **`rejected` cases** in steps 4, 5, 6: write to `inbound_failures` (encrypted raw, `reason`) and `ingest_error`. These are **permanent errors**, so still ack so the source doesn't resend forever.
+- **Infrastructure errors** (DB or DNS failure) throw. `/api/ingest` returns **503**, and the source retries on its next run.
 
 ### 2.3 Verify DKIM
 
@@ -136,70 +136,70 @@ const BANKS = {
 }
 ```
 
-- Dùng `mailauth/lib/dkim/verify`. Resolver là **DNS-over-HTTPS** trên Workers và `node:dns` trên Bun. Resolver được truyền vào qua `deps`.
-- **Điều kiện pass:** có ít nhất một chữ ký thoả cả ba:
-  - `status = pass` và `signingDomain = bank.dkimDomain`
-  - Danh sách header được ký chứa `from` và `to`
-  - **Không có tag `l=`** (body length). Nếu có `l=`, kẻ gian có thể chèn thêm nội dung vào cuối body mà chữ ký vẫn hợp lệ
-- **`gmailAddsDate`:** lần verify đầu fail thì bỏ header `Date` và verify lại một lần (xem research §3). Làm vậy vẫn an toàn vì hệ thống không dùng header `Date`; `occurred_at` lấy từ body, mà body đã được ký.
+- Uses `mailauth/lib/dkim/verify`. The resolver is **DNS-over-HTTPS** on Workers and `node:dns` on Bun. The resolver is passed in via `deps`.
+- **Pass condition:** at least one signature satisfies all three:
+  - `status = pass` and `signingDomain = bank.dkimDomain`
+  - The signed header list contains `from` and `to`
+  - **No `l=` tag** (body length). With `l=`, an attacker can append content to the end of the body and the signature still validates
+- **`gmailAddsDate`:** if the first verify fails, drop the `Date` header and verify once more (see research §3). This is still safe because the system doesn't use the `Date` header; `occurred_at` comes from the body, and the body is signed.
 
-### 2.4 Parse và khớp mã đơn
+### 2.4 Parsing and order code matching
 
-- **HTML → text:** bỏ `<style>`/`<script>`, đổi thẻ thành `\n`, decode entity. Khoảng 10 dòng, không cần thêm thư viện.
-- **CAKE:** đọc theo cặp label/giá trị: value là dòng không rỗng ngay sau các label `Số tiền`, `Mã giao dịch`, `Ngày giờ giao dịch`, `Nội dung giao dịch`, `Tài khoản/Tên/Ngân hàng chuyển|nhận`. Chiều giao dịch lấy từ dấu `+`/`-`.
-- **Timo:** dùng regex trên câu văn: `vừa (tăng|giảm) ([\d.]+) VND vào (dd/mm/yyyy HH:mm)`, `Số dư hiện tại: ([\d.]+)`, `Mô tả: (.*)`.
-- Số tiền `2.570.000` được đổi thành `2570000n`. Thời gian được gắn múi `+07:00`.
-- **Khớp mã đơn:** `description.toUpperCase().match(/<PREFIX>([A-Z0-9]+)/)`, **không bỏ khoảng trắng hay dấu chấm**, để `MBVCB.123.PMH456.DANG…` cho ra `456` chứ không nuốt cả phần text phía sau. Chỉ khớp khi `direction = in`.
+- **HTML → text:** strip `<style>`/`<script>`, turn tags into `\n`, decode entities. About 10 lines, no extra library needed.
+- **CAKE:** read label/value pairs: the value is the first non-empty line right after the labels `Số tiền`, `Mã giao dịch`, `Ngày giờ giao dịch`, `Nội dung giao dịch`, `Tài khoản/Tên/Ngân hàng chuyển|nhận`. Direction comes from the `+`/`-` sign.
+- **Timo:** regex over the sentence: `vừa (tăng|giảm) ([\d.]+) VND vào (dd/mm/yyyy HH:mm)`, `Số dư hiện tại: ([\d.]+)`, `Mô tả: (.*)`.
+- Amount `2.570.000` becomes `2570000n`. Times get the `+07:00` offset.
+- **Order code matching:** `description.toUpperCase().match(/<PREFIX>([A-Z0-9]+)/)`, **without stripping spaces or dots**, so `MBVCB.123.PMH456.DANG…` yields `456` instead of swallowing the trailing text. Only matched when `direction = in`.
 
-### 2.5 Nguồn Apps Script (Hosted)
+### 2.5 Apps Script source (Hosted)
 
-**Endpoint:** `POST /api/ingest` với các header `Authorization: Bearer <token>` và `Content-Type: message/rfc822`, body là raw MIME.
-- Token được tra qua `sha256` trong `ingest_token_hash`. Sai token thì trả 401.
-- Rate limit theo token.
-- Phản hồi thành công: `200 {"ok":true,"status":"stored|duplicate|ignored|rejected"}`.
+**Endpoint:** `POST /api/ingest` with headers `Authorization: Bearer <token>` and `Content-Type: message/rfc822`, body is the raw MIME.
+- The token is looked up via `sha256` in `ingest_token_hash`. Wrong token returns 401.
+- Rate limited per token.
+- Success response: `200 {"ok":true,"status":"stored|duplicate|ignored|rejected"}`.
 
-Dashboard sinh sẵn file `apps-script/Code.gs`, có điền URL và token:
+The dashboard generates `apps-script/Code.gs` with the URL and token filled in:
 
 ```
-setup()            -- user bấm Run một lần: cấp quyền, tạo trigger everyMinutes(1)
-poll()             -- LockService → GmailApp.search('from:(…) after:<cursor-300>') → từng message
-                      (không theo thread) có date > cursor → UrlFetchApp.fetchAll(getRawContent())
-                      → nếu mọi response đều ok:true thì cursor = max(date); nếu có 5xx thì giữ nguyên cursor
+setup()            -- user clicks Run once: grants permissions, creates an everyMinutes(1) trigger
+poll()             -- LockService → GmailApp.search('from:(…) after:<cursor-300>') → each message
+                      (not per thread) with date > cursor → UrlFetchApp.fetchAll(getRawContent())
+                      → if every response is ok:true then cursor = max(date); on any 5xx keep cursor unchanged
 ```
 
-- **State chỉ gồm một số `cursor`** (epoch) trong Script Properties. Mẫu tham khảo lưu cả map message ID, và map đó có thể vượt giới hạn 9KB của mỗi property khi có nhiều giao dịch. Ở đây server đã dedupe bằng `message_id`, nên chồng lấn 5 phút giữa các lần quét là an toàn.
-- **Quota:** trigger chạy tổng 90 phút/ngày chia cho 1440 lần, tức khoảng 3,7 giây mỗi lần là đủ. `UrlFetch` được 20k lần/ngày.
+- **State is a single `cursor` number** (epoch) in Script Properties. The reference sample stores a map of message IDs, which can exceed the 9KB per-property limit with many transactions. Here the server already dedupes by `message_id`, so the 5-minute overlap between scans is safe.
+- **Quota:** triggers get 90 minutes/day total divided over 1440 runs, i.e. about 3.7 seconds per run, which is enough. `UrlFetch` gets 20k calls/day.
 
-### 2.6 Nguồn IMAP (Self-host)
+### 2.6 IMAP source (Self-host)
 
-Mỗi config có `source = imap` ứng với một kết nối `ImapFlow` nằm lâu dài trong `server.ts`:
+Each config with `source = imap` maps to one long-lived `ImapFlow` connection in `server.ts`:
 
 ```
 connect(imap.gmail.com:993, gmail + App Password)
-open mailbox có special-use \All       -- "All Mail", vì user có thể có filter đưa email ra khỏi INBOX
-scan(): search { gmraw: 'from:(…) newer_than:1d' } → uid chưa gặp trong phiên → fetch { source: true } → ingestRawEmail
-chạy scan() khi vừa kết nối và mỗi lần có event 'exists' (IDLE)
-maxIdleTime 25 phút                    -- Gmail cắt kết nối IDLE sau khoảng 29 phút
-'close'/'error' → reconnect, backoff 1s → 5 phút
-auth fail → ingest_error = 'imap_auth_failed', dừng reconnect cho tới khi user cập nhật password
+open the mailbox with special-use \All -- "All Mail", since the user may have filters moving email out of INBOX
+scan(): search { gmraw: 'from:(…) newer_than:1d' } → uids not yet seen this session → fetch { source: true } → ingestRawEmail
+run scan() right after connecting and on every 'exists' event (IDLE)
+maxIdleTime 25 minutes                 -- Gmail drops IDLE connections after about 29 minutes
+'close'/'error' → reconnect, backoff 1s → 5 minutes
+auth fail → ingest_error = 'imap_auth_failed', stop reconnecting until the user updates the password
 ```
 
-### 2.7 Chưa làm
+### 2.7 Not yet
 
 - Gmail OAuth (P4).
-- Email Worker (chỉ khi có domain).
-- Tự động phát hiện ngân hàng mới: khi đó thêm một dòng vào `BANKS` và viết một parser.
+- Email Worker (only once there is a domain).
+- Auto-detecting new banks: that means adding one row to `BANKS` and writing a parser.
 
 ---
 
-## 3. Gửi webhook ✅
+## 3. Webhook delivery ✅
 
-Học từ:
-- `svix-webhooks` (chuẩn ký, danh sách IP bị chặn)
-- `outpost` (lịch retry cố định)
-- `convoy` (các trạng thái của delivery)
-- `saasmail` (claim delivery bằng một UPDATE có điều kiện)
-- `laravel-sepay` (phía nhận nên trả 2xx khi gặp bản trùng)
+Learned from:
+- `svix-webhooks` (signing standard, blocked IP list)
+- `outpost` (fixed retry schedule)
+- `convoy` (delivery states)
+- `saasmail` (claiming a delivery with a conditional UPDATE)
+- `laravel-sepay` (receivers should return 2xx on duplicates)
 
 ### 3.1 Request
 
@@ -207,8 +207,8 @@ Học từ:
 POST <webhook_url>
 content-type: application/json
 user-agent: PayMailHook/1.0
-webhook-id: <delivery.id>                  # giữ nguyên qua mọi lần retry/resend, dùng để idempotency
-webhook-timestamp: <unix seconds>          # mới cho mỗi lần gửi
+webhook-id: <delivery.id>                  # unchanged across all retries/resends, used for idempotency
+webhook-timestamp: <unix seconds>          # fresh for each send
 webhook-signature: v1,<base64(HMAC-SHA256(secret, "{id}.{timestamp}.{body}"))>
 ```
 
@@ -229,207 +229,207 @@ webhook-signature: v1,<base64(HMAC-SHA256(secret, "{id}.{timestamp}.{body}"))>
 }
 ```
 
-- **Ký theo [Standard Webhooks](https://www.standardwebhooks.com/),** tự viết khoảng 10 dòng bằng `crypto.subtle` (chạy được trên cả Workers lẫn Bun). Test đối chiếu với thư viện `standardwebhooks` (chỉ là devDependency) để bảo đảm phía nhận verify được bằng thư viện chuẩn ở mọi ngôn ngữ.
-- **Payload** được sinh một lần khi tạo delivery và lưu vào `webhook_deliveries.payload`. Mỗi lần gửi đều dùng lại đúng body đó, chỉ timestamp và chữ ký là mới.
-- **Secret** có dạng `whsec_` + base64 của 24 byte ngẫu nhiên, chỉ hiện một lần. Lưu bằng AES-GCM với khoá `ENCRYPTION_KEY` trong env. Khi xoay vòng thì thay luôn secret cũ.
+- **Signed per [Standard Webhooks](https://www.standardwebhooks.com/),** hand-written in about 10 lines with `crypto.subtle` (runs on both Workers and Bun). Tested against the `standardwebhooks` library (devDependency only) to ensure receivers can verify with the standard library in any language.
+- **Payload** is generated once when the delivery is created and stored in `webhook_deliveries.payload`. Every send reuses exactly that body; only the timestamp and signature are fresh.
+- **Secret** is `whsec_` + base64 of 24 random bytes, shown only once. Stored with AES-GCM using the `ENCRYPTION_KEY` env key. Rotation replaces the old secret immediately.
 
-### 3.2 Gửi một lần (`deliver(id, trigger)`)
+### 3.2 Single send (`deliver(id, trigger)`)
 
 ```
 1. Claim:  UPDATE webhook_deliveries
-             SET next_attempt_at = now() + interval '60 s'           -- lease > timeout 10s
-           WHERE id = $1 AND status IN ('pending','retrying')        -- (manual: cho phép cả failed/success)
-             AND next_attempt_at <= now() + interval '5 s'           -- chấp nhận message tới sớm vài giây
+             SET next_attempt_at = now() + interval '60 s'           -- lease > 10s timeout
+           WHERE id = $1 AND status IN ('pending','retrying')        -- (manual: also allows failed/success)
+             AND next_attempt_at <= now() + interval '5 s'           -- tolerate messages arriving a few seconds early
            RETURNING *
-           → không có dòng nào thì bỏ qua (đã có tiến trình khác claim, hoặc chưa tới hạn)
-2. validateWebhookUrl(config.webhook_url)                            -- kiểm tra lại mỗi lần gửi
+           → no row means skip (another process already claimed it, or it isn't due yet)
+2. validateWebhookUrl(config.webhook_url)                            -- re-checked on every send
 3. fetch(url, { method: 'POST', body, redirect: 'manual', signal: AbortSignal.timeout(10_000) })
 4. INSERT webhook_attempts (status_code | error, response_body ≤1KB, duration_ms, trigger)
 5. 2xx                       → status = success, next_attempt_at = null
-   lỗi (3xx/4xx/5xx/timeout) → attempt_count+1; còn lịch → status = retrying, next_attempt_at = now + delay,
-                               scheduleDelivery(id, delay); hết lịch → status = failed
-   lỗi khi trigger = manual  → giữ nguyên status, không lên lịch tiếp (giống svix)
+   error (3xx/4xx/5xx/timeout) → attempt_count+1; schedule remaining → status = retrying, next_attempt_at = now + delay,
+                               scheduleDelivery(id, delay); schedule exhausted → status = failed
+   error with trigger = manual → keep status unchanged, don't schedule further (like svix)
 ```
 
-**Lịch retry:** `[10, 10, 20, 30, 50, 3600, 7200, 14400, 28800]` giây. Tổng cộng 1 lần gửi đầu và 9 lần retry, tức 10 lần gửi trong khoảng **15 giờ**.
+**Retry schedule:** `[10, 10, 20, 30, 50, 3600, 7200, 14400, 28800]` seconds. In total 1 initial send plus 9 retries, i.e. 10 sends over about **15 hours**.
 
-### 3.3 `scheduleDelivery(id, delaySeconds)`: hai cách triển khai
+### 3.3 `scheduleDelivery(id, delaySeconds)`: two implementations
 
 | | Hosted (Workers) | Self-host (Bun) |
 |---|---|---|
-| Hẹn giờ | `QUEUE.send({ id }, { delaySeconds })`. Consumer gọi `deliver()` rồi **luôn `ack()`** | `setTimeout(() => deliver(id), delay * 1000)` |
-| Khôi phục | Cron mỗi giờ: `status IN (pending, retrying) AND next_attempt_at < now() - 2 min` → `QUEUE.send` | Khi khởi động: nạp mọi delivery `pending/retrying` rồi `setTimeout` theo `next_attempt_at` |
+| Scheduling | `QUEUE.send({ id }, { delaySeconds })`. The consumer calls `deliver()` then **always `ack()`s** | `setTimeout(() => deliver(id), delay * 1000)` |
+| Recovery | Hourly cron: `status IN (pending, retrying) AND next_attempt_at < now() - 2 min` → `QUEUE.send` | On startup: load all `pending/retrying` deliveries and `setTimeout` by `next_attempt_at` |
 
-- Queue **không dùng `msg.retry()`** mà gửi một message mới cho mỗi lần retry. Như vậy không phụ thuộc giới hạn giữ message 24h hay `max_retries`, và trạng thái thật chỉ nằm trong DB.
-- **Queue là at-least-once**, có thể giao trùng. Cron và bộ hẹn giờ cũng có thể chạy trùng nhau. Bước claim ở 3.2 bảo đảm mỗi lần gửi chỉ xảy ra một lần.
-- **Chi phí:** mỗi lần gửi tốn khoảng 3 thao tác queue (send, read, ack). Mức 10k thao tác/ngày của gói free tương đương khoảng 3.000 lần gửi mỗi ngày.
+- The queue **doesn't use `msg.retry()`**; it sends a new message for each retry. That avoids depending on the 24h message retention limit or `max_retries`, and the real state lives only in the DB.
+- **The queue is at-least-once** and may deliver duplicates. The cron and the timer can also overlap. The claim step in 3.2 ensures each send happens only once.
+- **Cost:** each send costs about 3 queue operations (send, read, ack). The free tier's 10k operations/day is about 3,000 sends per day.
 
-### 3.4 Chặn SSRF (`validateWebhookUrl`)
+### 3.4 SSRF protection (`validateWebhookUrl`)
 
-Kiểm tra khi lưu config và trước mỗi lần gửi:
-- Chỉ nhận `https:`.
-- Không có `user:pass@`.
-- Port để trống hoặc là 443.
-- Hostname không phải IP literal (v4, `[v6]`, dạng thập phân/hex).
-- Không phải `localhost`, `*.local`, `*.internal`, `*.localhost`, và không phải hostname của chính app.
-- Luôn dùng `redirect: 'manual'`, nên phản hồi 3xx được tính là lỗi. Ngăn việc chuyển hướng tới địa chỉ nội bộ.
+Checked when saving the config and before every send:
+- Only `https:` accepted.
+- No `user:pass@`.
+- Port empty or 443.
+- Hostname is not an IP literal (v4, `[v6]`, decimal/hex forms).
+- Not `localhost`, `*.local`, `*.internal`, `*.localhost`, and not the app's own hostname.
+- Always uses `redirect: 'manual'`, so a 3xx response counts as an error. Prevents redirects to internal addresses.
 
-**Self-host** mặc định bật `ALLOW_PRIVATE_WEBHOOKS=true`, vì webhook thường trỏ về app trong LAN hoặc localhost. Khi bật thì cho phép `http:`, IP private và localhost.
+**Self-host** enables `ALLOW_PRIVATE_WEBHOOKS=true` by default, since webhooks often point to an app on the LAN or localhost. When enabled, `http:`, private IPs and localhost are allowed.
 
-`ponytail:` chưa tra DNS để chặn tên miền trỏ về IP private, cũng như DNS rebinding. Workers không cho kiểm soát socket. Khi cần thì thêm bước tra DoH (A/AAAA) và chặn theo danh sách `is_allowed` của svix.
+`ponytail:` no DNS lookup yet to block domains resolving to private IPs, nor DNS rebinding. Workers gives no socket control. When needed, add a DoH lookup (A/AAAA) and block per svix's `is_allowed` list.
 
-### 3.5 Thao tác thủ công và dọn dẹp
+### 3.5 Manual actions and cleanup
 
-- **Retry/Resend từ dashboard:** `POST /api/webhook-deliveries/:id/retry` gọi `scheduleDelivery(id, 0)` với `trigger = manual`. Được phép gửi lại cả delivery đã `success`; vì `webhook-id` giữ nguyên nên phía nhận vẫn dedupe được.
-- **Test webhook:** nút "Gửi thử" gửi ngay (đồng bộ) một event `payment.test` có payload mẫu, không lưu delivery và không retry. Phản hồi hiện thẳng trên màn hình.
-- **Cron mỗi giờ** (cùng job với phần khôi phục):
-  - Xoá `webhook_deliveries` ở trạng thái `success/failed` có `created_at` quá 30 ngày; `webhook_attempts` bị xoá theo cascade.
-  - Xoá `inbound_failures` quá 7 ngày.
-  - Xoá theo batch có `LIMIT` (học từ `cloudflare_temp_email`).
+- **Retry/Resend from the dashboard:** `POST /api/webhook-deliveries/:id/retry` calls `scheduleDelivery(id, 0)` with `trigger = manual`. Resending a `success` delivery is allowed; since `webhook-id` is unchanged, the receiver can still dedupe.
+- **Test webhook:** the "Send test" button immediately (synchronously) sends a `payment.test` event with a sample payload, storing no delivery and doing no retries. The response is shown directly on screen.
+- **Hourly cron** (same job as recovery):
+  - Delete `webhook_deliveries` in `success/failed` status with `created_at` older than 30 days; `webhook_attempts` are deleted via cascade.
+  - Delete `inbound_failures` older than 7 days.
+  - Delete in batches with `LIMIT` (learned from `cloudflare_temp_email`).
 
-### 3.6 Hướng dẫn phía nhận (đưa vào trang Guide ở P3)
+### 3.6 Receiver guide (goes into the Guide page in P3)
 
-1. Verify chữ ký bằng thư viện `standardwebhooks`, chấp nhận sai lệch timestamp tối đa 5 phút.
-2. Dedupe theo `webhook-id`. **Gặp bản trùng thì vẫn trả 2xx**, nếu không retry sẽ tiếp tục dồn tới.
-3. Đối chiếu `orderId` **và** `amount` với đơn hàng. Chỉ chuyển trạng thái đơn khi đang ở `pending`.
-4. Trả 2xx trong vòng 10 giây. Việc nặng thì đưa vào queue của bạn rồi phản hồi ngay.
+1. Verify the signature with the `standardwebhooks` library, allowing at most 5 minutes of timestamp skew.
+2. Dedupe by `webhook-id`. **Still return 2xx on duplicates**, otherwise retries keep piling up.
+3. Match both `orderId` **and** `amount` against the order. Only transition the order when it is `pending`.
+4. Return 2xx within 10 seconds. Push heavy work onto your own queue and respond immediately.
 
-### 3.7 Chưa làm
+### 3.7 Not yet
 
-- Tôn trọng header `Retry-After` khi nhận 429/503.
-- Tự tắt endpoint lỗi liên tục (svix có tính năng này).
-- Ký song song secret cũ và mới trong lúc xoay vòng (`v1,a v1,b`).
-- Một config gửi tới nhiều webhook URL.
+- Honor the `Retry-After` header on 429/503.
+- Auto-disable endpoints that keep failing (svix has this).
+- Dual-sign with old and new secrets during rotation (`v1,a v1,b`).
+- One config sending to multiple webhook URLs.
 
 ---
 
-## 4. API và auth ✅
+## 4. API and auth ✅
 
-Học từ:
-- `saasmail`: chuỗi middleware, scope theo user, dạng API key. Thiếu `onError` và rate limit, nên mình bổ sung.
-- `react-starter-kit`: tách Hono app khỏi entry của từng runtime, và **không** parse env ngay khi nạp module.
+Learned from:
+- `saasmail`: middleware chain, per-user scoping, API key format. It lacks `onError` and rate limiting, so we add them.
+- `react-starter-kit`: separate the Hono app from each runtime's entry, and **don't** parse env at module load.
 - Skill `better-auth-security-best-practices`.
 
-### 4.1 Tách app khỏi runtime
+### 4.1 Separating the app from the runtime
 
 ```
-src/api/app.ts     createApp(): Hono<{ Variables: { deps: Deps; user?: User } }>   -- không import gì của Cloudflare/Bun
-src/worker.ts      fetch: gắn deps (db qua Hyperdrive, QUEUE, DoH resolver, waitUntil) → app.fetch; queue(); scheduled()
-src/server.ts      Bun.serve: gắn deps (db qua DATABASE_URL, setTimeout scheduler, node:dns) → app.fetch; IMAP listeners; startup recovery
+src/api/app.ts     createApp(): Hono<{ Variables: { deps: Deps; user?: User } }>   -- imports nothing from Cloudflare/Bun
+src/worker.ts      fetch: wire deps (db via Hyperdrive, QUEUE, DoH resolver, waitUntil) → app.fetch; queue(); scheduled()
+src/server.ts      Bun.serve: wire deps (db via DATABASE_URL, setTimeout scheduler, node:dns) → app.fetch; IMAP listeners; startup recovery
 ```
 
-`Deps = { db, auth, env, scheduleDelivery, resolveTxt, waitUntil, now }`. Mọi thứ phụ thuộc runtime đều được truyền vào qua đây, nên core và API test được bằng `bun test` với PGlite.
+`Deps = { db, auth, env, scheduleDelivery, resolveTxt, waitUntil, now }`. Everything runtime-dependent is passed in here, so core and API are testable with `bun test` on PGlite.
 
-### 4.2 Middleware (theo thứ tự)
+### 4.2 Middleware (in order)
 
 1. `app.onError`:
-   - Lỗi zod → `400 {error:{code:'validation',issues}}`
-   - `HTTPException` → giữ nguyên status
-   - Lỗi khác → log rồi trả `500 {error:{code:'internal'}}`
+   - zod error → `400 {error:{code:'validation',issues}}`
+   - `HTTPException` → keep its status
+   - Other errors → log and return `500 {error:{code:'internal'}}`
 2. `/api/auth/*` → `auth.handler(c.req.raw)`.
-3. `csrf()` của Hono (kiểm tra `Origin`) cho các request không phải GET dùng cookie session. Request có API key hoặc ingest token thì bỏ qua bước này.
-4. `requireUser` trên `/api/*`, trừ các path public (`/api/ingest`, `/api/qr`, `/api/share/*`): gọi `auth.api.getSession({ headers })`, chấp nhận **cả cookie lẫn API key**, rồi `c.set('user')`.
-5. **Scope theo user:** mọi hàm truy vấn nhận `userId` làm tham số đầu tiên. Truy cập theo id dùng `WHERE id = $1 AND user_id = $2`; không tìm thấy thì trả **404**, không trả 403, để không lộ việc id đó có tồn tại.
+3. Hono's `csrf()` (checks `Origin`) for non-GET requests using a session cookie. Requests with an API key or ingest token skip this step.
+4. `requireUser` on `/api/*`, except public paths (`/api/ingest`, `/api/qr`, `/api/share/*`): calls `auth.api.getSession({ headers })`, accepting **both cookie and API key**, then `c.set('user')`.
+5. **Per-user scoping:** every query function takes `userId` as its first parameter. Access by id uses `WHERE id = $1 AND user_id = $2`; not found returns **404**, not 403, so as not to reveal whether the id exists.
 
-CORS: SPA chạy cùng origin nên không cần. Riêng `/api/qr` mở `*`.
+CORS: the SPA runs on the same origin, so none is needed. Only `/api/qr` allows `*`.
 
 ### 4.3 Routes
 
-| Route | Auth | Ghi chú |
+| Route | Auth | Notes |
 |---|---|---|
-| `/api/auth/*` | – | better-auth: đăng ký/đăng nhập email, Google, session, **admin** (`listUsers`, `setRole`, `banUser`…), **apiKey** (tạo/xoá key). Không phải tự viết route admin |
+| `/api/auth/*` | – | better-auth: email sign-up/sign-in, Google, session, **admin** (`listUsers`, `setRole`, `banUser`…), **apiKey** (create/delete keys). No hand-written admin routes |
 | `GET /api/me` | user | |
-| `GET/POST /api/email-configs` | user | POST trả về **ingest token và `Code.gs` một lần duy nhất** |
-| `GET/PATCH/DELETE /api/email-configs/:id` | user | PATCH `webhook_url` có validate SSRF |
-| `POST /api/email-configs/:id/rotate-token` | user | Trả token mới và `Code.gs` mới |
-| `POST /api/email-configs/:id/rotate-secret` | user | Trả `whsec_…` mới một lần |
-| `POST /api/email-configs/:id/test-webhook` | user | Gửi `payment.test` (xem 3.5) |
-| `GET /api/transactions` | user | Lọc theo `configId`, `orderId`, `direction`. Phân trang keyset `(occurred_at, id)` |
+| `GET/POST /api/email-configs` | user | POST returns the **ingest token and `Code.gs` exactly once** |
+| `GET/PATCH/DELETE /api/email-configs/:id` | user | PATCH `webhook_url` is SSRF-validated |
+| `POST /api/email-configs/:id/rotate-token` | user | Returns a new token and a new `Code.gs` |
+| `POST /api/email-configs/:id/rotate-secret` | user | Returns a new `whsec_…` once |
+| `POST /api/email-configs/:id/test-webhook` | user | Sends `payment.test` (see 3.5) |
+| `GET /api/transactions` | user | Filter by `configId`, `orderId`, `direction`. Keyset pagination on `(occurred_at, id)` |
 | `GET /api/transactions/:id` | user | |
-| `GET /api/webhook-deliveries` | user | Lọc theo `status` |
-| `GET /api/webhook-deliveries/:id` | user | Kèm danh sách attempts |
-| `POST /api/webhook-deliveries/:id/retry` | user | Xem 3.5 |
-| `POST /api/ingest` | ingest token | Xem 2.5 |
-| `GET /api/qr` | public | P3: ảnh VietQR dạng SVG |
-| `/api/share/*`, `/api/push/*`, `/mcp` | | Lần lượt ở P3, P4, P4 |
+| `GET /api/webhook-deliveries` | user | Filter by `status` |
+| `GET /api/webhook-deliveries/:id` | user | Includes the list of attempts |
+| `POST /api/webhook-deliveries/:id/retry` | user | See 3.5 |
+| `POST /api/ingest` | ingest token | See 2.5 |
+| `GET /api/qr` | public | P3: VietQR image as SVG |
+| `/api/share/*`, `/api/push/*`, `/mcp` | | In P3, P4, P4 respectively |
 
-Validate request bằng `@hono/zod-validator`. Frontend gọi qua `hc<AppType>()` để dùng chung type.
+Requests are validated with `@hono/zod-validator`. The frontend calls through `hc<AppType>()` to share types.
 
-### 4.4 Cấu hình better-auth
+### 4.4 better-auth configuration
 
 ```ts
 betterAuth({
   database: drizzleAdapter(db, { provider: 'pg' }),
   emailAndPassword: { enabled: true, disableSignUp: !env.ALLOW_SIGNUP },
-  socialProviders: env.GOOGLE_CLIENT_ID ? { google: { … } } : {},  // scope mặc định openid/email/profile: non-sensitive, không cần CASA
-  plugins: [admin(), apiKey({ enableSessionForAPIKeys: true })],   // tên option cần kiểm tra lại theo version khi code
+  socialProviders: env.GOOGLE_CLIENT_ID ? { google: { … } } : {},  // default scopes openid/email/profile: non-sensitive, no CASA needed
+  plugins: [admin(), apiKey({ enableSessionForAPIKeys: true })],   // re-check option name against the version when coding
   rateLimit: { enabled: true, storage: 'database',
                customRules: { '/sign-in/email': { window: 60, max: 5 }, '/sign-up/email': { window: 60, max: 3 } } },
-  session: { cookieCache: { enabled: true, maxAge: 300 } },        // giảm query, đỡ đánh thức Neon
+  session: { cookieCache: { enabled: true, maxAge: 300 } },        // fewer queries, fewer Neon wake-ups
   trustedOrigins: [env.BETTER_AUTH_URL],
   advanced: { backgroundTasks: { handler: deps.waitUntil } },
   databaseHooks: { user: { create: { before: firstUserBecomesAdmin } } },
 })
 ```
 
-- **Không có domain nên không gửi được email.** Vì vậy mặc định **tắt xác minh email và luồng quên mật khẩu**:
-  - Hosted khuyên đăng nhập bằng Google.
-  - Admin có thể đặt lại mật khẩu cho user qua admin plugin.
-  - Nếu có `RESEND_API_KEY` (khi đã có domain) thì tự bật xác minh email và quên mật khẩu.
-- **User đầu tiên tự thành admin.** Tiện cho Self-host: vừa `docker compose up` xong là đăng ký, có quyền admin ngay.
-- **Chống chiếm chỗ Gmail:** vì không xác minh email, kẻ gian có thể tạo config với Gmail của người khác để chặn họ. Cách xử lý:
-  - `gmail` chỉ UNIQUE trong số các config **đã nhận ít nhất một email hợp lệ**, tức `last_ingest_at IS NOT NULL`. Nhận được email hợp lệ chứng minh người đó thật sự sở hữu Gmail, vì phải chạy được script trong đó, hoặc email phải có DKIM với `To` đúng Gmail đó.
-  - Cron xoá các config chưa từng nhận email sau 7 ngày.
+- **No domain, so no email sending.** Therefore **email verification and the forgot-password flow are off** by default:
+  - Hosted recommends signing in with Google.
+  - Admins can reset a user's password via the admin plugin.
+  - If `RESEND_API_KEY` is set (once there is a domain), email verification and forgot-password are enabled automatically.
+- **The first user automatically becomes admin.** Convenient for Self-host: right after `docker compose up`, sign up and you have admin rights.
+- **Gmail squatting protection:** without email verification, an attacker could create a config with someone else's Gmail to block them. Handling:
+  - `gmail` is UNIQUE only among configs that **have received at least one valid email**, i.e. `last_ingest_at IS NOT NULL`. Receiving a valid email proves the person actually owns the Gmail, since they had to run the script inside it, or the email must carry DKIM with `To` set to that Gmail.
+  - Cron deletes configs that have never received an email after 7 days.
 
 ### 4.5 Env
 
-| Biến | Bắt buộc | Ghi chú |
+| Variable | Required | Notes |
 |---|---|---|
 | `DATABASE_URL` / binding `HYPERDRIVE` | ✅ | |
-| `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | ✅ | Fail ngay khi khởi động nếu thiếu, giống saasmail |
-| `ENCRYPTION_KEY` | ✅ | AES-GCM cho webhook secret, App Password và raw email bị lỗi |
-| `GOOGLE_CLIENT_ID/SECRET` | | Bật đăng nhập Google |
-| `RESEND_API_KEY` | | Bật xác minh email và quên mật khẩu |
-| `ALLOW_SIGNUP` | | Mặc định `true`. Self-host riêng tư thì đặt `false` |
-| `ALLOW_PRIVATE_WEBHOOKS` | | Mặc định `false` cho Hosted, `true` cho Self-host |
+| `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | ✅ | Fail at startup if missing, like saasmail |
+| `ENCRYPTION_KEY` | ✅ | AES-GCM for webhook secrets, App Passwords and failed raw emails |
+| `GOOGLE_CLIENT_ID/SECRET` | | Enables Google sign-in |
+| `RESEND_API_KEY` | | Enables email verification and forgot-password |
+| `ALLOW_SIGNUP` | | Default `true`. Set `false` for a private Self-host |
+| `ALLOW_PRIVATE_WEBHOOKS` | | Default `false` for Hosted, `true` for Self-host |
 
-Env được validate bằng zod **khi xử lý request đầu tiên**, không phải lúc nạp module (Workers chỉ có `env` bên trong handler).
+Env is validated with zod **when handling the first request**, not at module load (Workers only has `env` inside the handler).
 
-### 4.6 Chưa làm
+### 4.6 Not yet
 
-- Rate limit cho `/api/ingest` theo token. Hosted dùng binding Rate Limiting của Workers khi bị lạm dụng. `ponytail:` hiện tại token sai chỉ tốn một lần tra index.
-- Audit log qua `databaseHooks`.
+- Rate limiting `/api/ingest` per token. Hosted uses the Workers Rate Limiting binding if abused. `ponytail:` currently a wrong token costs only one index lookup.
+- Audit log via `databaseHooks`.
 - 2FA/passkey.
-- OpenAPI/Swagger. Chỉ thêm khi có nhu cầu công khai API cho bên thứ ba.
+- OpenAPI/Swagger. Add only when there is a need to expose the API publicly to third parties.
 
 ---
 
-## 5. Chiến lược test ✅
+## 5. Test strategy ✅
 
-Học từ:
-- `react-starter-kit`: PGlite chạy migration thật, không cần DB riêng để test.
-- `saasmail`: inject `fetch` thay vì patch global. Bài học ngược: DDL chép tay trong test bị lệch với schema thật.
-- `cloudflare_temp_email`: harness tạo email giả.
+Learned from:
+- `react-starter-kit`: PGlite runs the real migrations, no separate DB needed for tests.
+- `saasmail`: inject `fetch` instead of patching the global. Counter-lesson: hand-copied DDL in tests drifted from the real schema.
+- `cloudflare_temp_email`: fake email harness.
 
-**Công cụ:** `bun test`, không cần framework khác (D14). Chạy được trên máy dev dù không có `workerd`.
+**Tooling:** `bun test`, no other framework needed (D14). Runs on dev machines even without `workerd`.
 
-### 5.1 Các lớp test
+### 5.1 Test layers
 
-| Lớp | Test gì | Cách làm |
+| Layer | What is tested | How |
 |---|---|---|
-| **Parser** (TDD, viết test trước) | `parseCake`, `parseTimo`: tiền vào/ra, số tiền có dấu chấm, múi +07:00, trích mã đơn trong `MBVCB.x.PMH456.DANG…` | Fixture `test/fixtures/{cake,timo}/*.eml` **đã ẩn danh**. So sánh với một snapshot `ParsedTxn` |
-| **DKIM** | Các trường hợp: pass; sai `d=`; `To` không được ký; body bị sửa; có tag `l=`; lỗi `Date` của Timo (ký khi không có `Date`, sau đó chèn `Date` thì lần đầu fail, bỏ `Date` rồi verify lại thì pass) | **Tự sinh cặp khoá RSA khi test**, ký email tổng hợp bằng `mailauth/lib/dkim/sign`, resolver giả trả về public key. Không cần DNS thật, không dùng dữ liệu thật |
-| **DKIM với email thật** | Mọi file trong `mail-template/` verify pass | `test.skipIf(!exists('mail-template'))`, dùng DNS thật. Chỉ chạy trên máy dev, CI bỏ qua |
-| **Ingest** | Các kết quả: `stored`, `duplicate` (gửi cùng email hai lần), `ignored`, `rejected` (có dòng `inbound_failures`), khớp mã đơn thì tạo delivery và `scheduleDelivery` được gọi, `to_mismatch` với các biến thể của Gmail | PGlite, resolver giả, `scheduleDelivery` giả chỉ ghi lại id được gọi |
-| **Webhook** | Chữ ký verify được bằng thư viện `standardwebhooks`; chuyển trạng thái theo lịch retry; hết lịch thì `failed`; thử thủ công mà lỗi thì không lên lịch tiếp; **gọi `deliver()` hai lần song song chỉ tạo ra một lần fetch** | `fetch` và `now` được inject |
-| **SSRF** | `validateWebhookUrl` với bảng input: IP literal, `[::1]`, `0x7f000001`, `user:pass@`, port 8443, `.local`, kèm cờ `allowPrivate` | Test theo bảng |
-| **API** | Chặn truy cập chéo user (tài nguyên của user khác trả 404); API key dùng được như session; `/api/ingest` sai token trả 401, DB lỗi trả 503; POST dùng cookie mà thiếu `Origin` bị chặn | `app.request()` của Hono với deps là PGlite; better-auth dùng chung PGlite |
-| **Apps Script** | Cursor: chỉ tiến lên khi mọi request đều trả `ok:true`, giữ nguyên khi có 5xx; dedupe theo từng message (không theo thread) | Nạp `Code.gs` vào Bun, giả lập `GmailApp`, `UrlFetchApp`, `PropertiesService`, `LockService` |
+| **Parser** (TDD, tests first) | `parseCake`, `parseTimo`: incoming/outgoing, amounts with dots, +07:00 offset, order code extraction from `MBVCB.x.PMH456.DANG…` | **Anonymized** fixtures `test/fixtures/{cake,timo}/*.eml`. Compared against a `ParsedTxn` snapshot |
+| **DKIM** | Cases: pass; wrong `d=`; `To` not signed; body modified; `l=` tag present; Timo's `Date` issue (signed without `Date`, then `Date` inserted, so the first verify fails, and verify after dropping `Date` passes) | **Generate an RSA key pair at test time**, sign synthetic emails with `mailauth/lib/dkim/sign`, fake resolver returns the public key. No real DNS, no real data |
+| **DKIM with real emails** | Every file in `mail-template/` verifies as pass | `test.skipIf(!exists('mail-template'))`, uses real DNS. Runs only on dev machines, skipped in CI |
+| **Ingest** | Outcomes: `stored`, `duplicate` (same email sent twice), `ignored`, `rejected` (with an `inbound_failures` row), order code match creates a delivery and calls `scheduleDelivery`, `to_mismatch` with Gmail variants | PGlite, fake resolver, fake `scheduleDelivery` that only records the ids it was called with |
+| **Webhook** | Signature verifies with the `standardwebhooks` library; state transitions along the retry schedule; `failed` when the schedule is exhausted; a failed manual attempt schedules nothing further; **calling `deliver()` twice concurrently produces only one fetch** | `fetch` and `now` injected |
+| **SSRF** | `validateWebhookUrl` with an input table: IP literal, `[::1]`, `0x7f000001`, `user:pass@`, port 8443, `.local`, plus the `allowPrivate` flag | Table-driven tests |
+| **API** | Cross-user access blocked (another user's resource returns 404); API key works like a session; `/api/ingest` with a wrong token returns 401, DB failure returns 503; cookie POST without `Origin` is blocked | Hono's `app.request()` with PGlite deps; better-auth shares the PGlite |
+| **Apps Script** | Cursor: advances only when every request returns `ok:true`, unchanged on any 5xx; dedupe per message (not per thread) | Load `Code.gs` into Bun, mock `GmailApp`, `UrlFetchApp`, `PropertiesService`, `LockService` |
 
-### 5.2 Fixture
+### 5.2 Fixtures
 
-- **Tạo fixture:** `bun scripts/anonymize-eml.ts mail-template/ test/fixtures/` thay họ tên, số tài khoản và Gmail thật bằng giá trị giả cố định, rồi mới commit. DKIM của fixture chắc chắn fail, nên fixture chỉ dùng để test parser. Test DKIM thì dùng email tổng hợp đã ký ở 5.1.
-- **DB:** mỗi file test tạo một PGlite mới rồi chạy `migrations/` bằng `drizzle-orm/pglite/migrator`. Test chạy trên **đúng migration thật**, không chép DDL bằng tay.
+- **Creating fixtures:** `bun scripts/anonymize-eml.ts mail-template/ test/fixtures/` replaces real names, account numbers and Gmail addresses with fixed fake values before committing. Fixture DKIM will certainly fail, so fixtures are only for parser tests. DKIM tests use the signed synthetic emails from 5.1.
+- **DB:** each test file creates a fresh PGlite and runs `migrations/` with `drizzle-orm/pglite/migrator`. Tests run against **the real migrations**, no hand-copied DDL.
 
 ### 5.3 CI (GitHub Actions)
 
@@ -437,16 +437,16 @@ Học từ:
 bun install → biome check → tsc --noEmit → bun test → wrangler deploy --dry-run
 ```
 
-Bước `--dry-run` bắt lỗi bundle cho Workers, ví dụ có dependency kéo theo `node:sqlite` như spike ở research §3.
+The `--dry-run` step catches Workers bundle errors, e.g. a dependency pulling in `node:sqlite` like the spike in research §3.
 
-### 5.4 Kiểm tra bằng tay và spike (không tự động hoá)
+### 5.4 Manual checks and spikes (not automated)
 
-- Apps Script: `getRawContent()` trên Gmail thật verify DKIM pass (sau khi xử lý `Date` của Timo).
-- Workers: đo CPU time của `ingestRawEmail` với email CAKE 40KB so với giới hạn 10ms của gói free.
-- IMAP: kết nối Gmail thật bằng App Password, nhận email mới qua IDLE, tự reconnect sau khi rút mạng.
+- Apps Script: `getRawContent()` on real Gmail verifies DKIM pass (after handling Timo's `Date`).
+- Workers: measure CPU time of `ingestRawEmail` on a 40KB CAKE email against the free tier's 10ms limit.
+- IMAP: connect to real Gmail with an App Password, receive new email via IDLE, auto-reconnect after unplugging the network.
 
-### 5.5 Chưa làm
+### 5.5 Not yet
 
-- E2E bằng Playwright (thêm ở P3, khi có dashboard).
-- Test IMAP tự động với một IMAP server giả. Hàm `scan()` nhận client qua tham số nên có thể thêm sau.
-- Đo coverage.
+- Playwright E2E (added in P3, once there is a dashboard).
+- Automated IMAP tests against a fake IMAP server. `scan()` takes the client as a parameter, so this can be added later.
+- Coverage measurement.

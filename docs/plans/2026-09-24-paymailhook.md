@@ -1,56 +1,56 @@
 # PayMailHook Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use executing-plans (hoặc subagent-driven-development) để làm plan này theo từng task. Luôn theo [CLAUDE.md](../../CLAUDE.md): code và comment viết bằng tiếng Anh, trả lời bằng tiếng Việt, TDD, mỗi bước một commit.
+> **For Claude:** REQUIRED SUB-SKILL: Use executing-plans (or subagent-driven-development) to work through this plan task by task. Always follow [CLAUDE.md](../../CLAUDE.md): code, comments, commits and docs in English; replies to the user in Vietnamese; TDD; one commit per step.
 
-**Goal:** Xây dựng PayMailHook đúng theo [docs/design.md](../design.md). Hệ thống nhận email biến động số dư (CAKE, Timo), verify DKIM, parse, lưu giao dịch, rồi gửi webhook đã ký kèm retry. Có dashboard, và chạy được ở hai chế độ Hosted (Cloudflare Workers) và Self-host (Docker).
+**Goal:** Build PayMailHook exactly as specified in [docs/design.md](../design.md). The system receives balance-change emails (CAKE, Timo), verifies DKIM, parses them, stores the transaction, then sends a signed webhook with retries. It has a dashboard and runs in two modes: Hosted (Cloudflare Workers) and Self-host (Docker).
 
-**Architecture:** Toàn bộ logic nằm trong `src/core`, viết bằng TS thuần, nhận mọi phụ thuộc runtime qua `Deps`. `src/api/app.ts` là Hono app, không phụ thuộc runtime. Hai entry mỏng: `src/worker.ts` (Workers + Queues + Cron) và `src/server.ts` (Bun + setTimeout + IMAP). Test bằng `bun test` với PGlite.
+**Architecture:** All logic lives in `src/core`, written in plain TS, receiving every runtime dependency through `Deps`. `src/api/app.ts` is a runtime-agnostic Hono app. Two thin entries: `src/worker.ts` (Workers + Queues + Cron) and `src/server.ts` (Bun + setTimeout + IMAP). Tests use `bun test` with PGlite.
 
 **Tech Stack:** Bun, TypeScript, Hono, Drizzle (pg-core), postgres.js, PGlite (test), postal-mime, mailauth (`lib/dkim/*`), better-auth, Cloudflare Workers/Queues/Cron/Hyperdrive, Neon, React + Vite + TanStack Query + shadcn/ui, imapflow, Biome.
 
-**Skills dùng khi làm:** `ponytail` (luôn bật), `tdd`, `drizzle-orm-expert`, `postgres-best-practices`, `hono`, `cloudflare-workers-expert`, `bun-development`, `better-auth-best-practices`, `better-auth-security-best-practices`, `google-apps-script`, `shadcn`, `tanstack-query-expert`, `react-best-practices`. Tra docs mới nhất qua context7 trước khi dùng API của một thư viện. Cuối mỗi pha chạy `ponytail-review`.
+**Skills to use:** `ponytail` (always on), `tdd`, `drizzle-orm-expert`, `postgres-best-practices`, `hono`, `cloudflare-workers-expert`, `bun-development`, `better-auth-best-practices`, `better-auth-security-best-practices`, `google-apps-script`, `shadcn`, `tanstack-query-expert`, `react-best-practices`. Look up the latest docs via context7 before using a library's API. Run `ponytail-review` at the end of each phase.
 
-**Mức độ chi tiết:** P1 có code đầy đủ, vì là pha làm ngay. P2 đến P4 chỉ ghi ở mức task (file, test, tiêu chí xong). Plan chi tiết cho các pha này sẽ được viết khi bắt đầu từng pha, vì cần dựa trên code thật của P1 (`ponytail`: không viết code cho những thứ chưa có nền).
+**Level of detail:** P1 has full code, since it is the phase being done now. P2 through P4 are described at task level only (files, tests, done criteria). Detailed plans for those phases will be written when each phase starts, because they must build on P1's real code (`ponytail`: don't write code for things that have no foundation yet).
 
 ---
 
-## Bắt đầu session mới
+## Starting a new session
 
-Môi trường đã được chuẩn bị sẵn (2026-09-24):
+The environment has already been prepared (2026-09-24):
 
-| Thứ | Trạng thái |
+| Item | Status |
 |---|---|
-| Bun 1.3.14, Docker, tmux | ✅ Có sẵn |
-| Postgres 17 cho dev | ✅ Container `paymailhook-postgres` ở `localhost:5435` (user/pass `postgres`, db `paymailhook`, volume `paymailhook-pgdata`, tự khởi động lại). Các cổng 5432 và 5434 đã có project khác dùng |
-| Node | ⚠️ v20, trong khi wrangler cần ≥22. **Chạy wrangler bằng Bun** (`bun node_modules/wrangler/bin/wrangler.js …`): lệnh `deploy --dry-run` đã được kiểm chứng chạy được. `wrangler dev` thì **không** dùng được vì glibc 2.31 không chạy nổi `workerd` (xem research §3) |
-| Email mẫu thật | ✅ `mail-template/{cake,timo}/*.eml` và `mail-template/pii.json`, đều đã gitignore |
-| Repo tham khảo | ✅ `repo-ref/` (đã gitignore), xem research §4 |
-| `.env` | ❌ **Chưa có.** Theo CLAUDE.md, agent không được tạo hay sửa `.env*`. Người dùng tự chạy `cp .env.example .env` rồi điền `ENCRYPTION_KEY=$(openssl rand -base64 32)` |
+| Bun 1.3.14, Docker, tmux | ✅ Available |
+| Postgres 17 for dev | ✅ Container `paymailhook-postgres` on `localhost:5435` (user/pass `postgres`, db `paymailhook`, volume `paymailhook-pgdata`, auto-restart). Ports 5432 and 5434 are used by other projects |
+| Node | ⚠️ v20, while wrangler needs ≥22. **Run wrangler with Bun** (`bun node_modules/wrangler/bin/wrangler.js …`): `deploy --dry-run` is verified to work. `wrangler dev` does **not** work because glibc 2.31 cannot run `workerd` (see research §3) |
+| Real sample emails | ✅ `mail-template/{cake,timo}/*.eml` and `mail-template/pii.json`, both gitignored |
+| Reference repos | ✅ `repo-ref/` (gitignored), see research §4 |
+| `.env` | ❌ **Not created yet.** Per CLAUDE.md, the agent must not create or edit `.env*`. The user runs `cp .env.example .env` and fills in `ENCRYPTION_KEY=$(openssl rand -base64 32)` |
 
-Lệnh mở đầu cho agent: *"Đọc CLAUDE.md, README.md, docs/design.md và plan này, rồi làm Task 1.0."*
+Kickoff prompt for the agent: *"Read CLAUDE.md, README.md, docs/design.md and this plan, then do Task 1.0."*
 
 ---
 
-## Quy ước chung
+## Conventions
 
-- **Kiểm tra trước mỗi commit:** `bun run check`, tức Biome, `tsc --noEmit` và `bun test` đều phải pass.
-- **Commit:** theo Conventional Commits, mỗi task một commit. Cuối message có dòng `Co-Authored-By`.
-- **Không bao giờ sửa tay:** `bun.lock` (chỉ thay đổi qua `bun add`), `.env*`, `migrations/*` (chỉ sinh bằng `bun run db:generate`).
-- **Xử lý lỗi:** không dùng `catch {}` trần, luôn bắt đúng loại lỗi.
-- **Kích thước:** mỗi hàm dưới 50 dòng, mỗi file dưới 300 dòng.
-- **Chạy lâu:** lệnh chạy lâu (dev server) chạy trong tmux, session đặt tên `PayMailHook`.
+- **Check before every commit:** `bun run check`, i.e. Biome, `tsc --noEmit` and `bun test` must all pass.
+- **Commits:** Conventional Commits, one commit per task. End the message with a `Co-Authored-By` line.
+- **Never edit by hand:** `bun.lock` (changes only via `bun add`), `.env*`, `migrations/*` (generated only via `bun run db:generate`).
+- **Error handling:** no bare `catch {}`; always catch the specific error type.
+- **Size:** each function under 50 lines, each file under 300 lines.
+- **Long-running:** long-running commands (dev server) run in tmux, session named `PayMailHook`.
 
 ---
 
 # P1: Core pipeline
 
-Khi xong P1: một email CAKE hoặc Timo thật, được Apps Script gửi lên `POST /api/ingest`, sẽ tạo ra một transaction. Nếu có mã đơn, webhook đã ký được gửi đi và retry theo lịch. Chạy được cả trên Bun (local) lẫn Workers (`wrangler deploy --dry-run` pass).
+When P1 is done: a real CAKE or Timo email, sent by Apps Script to `POST /api/ingest`, creates a transaction. If it has an order code, a signed webhook is sent and retried on schedule. Runs on both Bun (local) and Workers (`wrangler deploy --dry-run` passes).
 
 ### Task 1.0: Scaffold
 
-**Files:** Tạo `package.json`, `tsconfig.json`, `biome.json`, `bunfig.toml`, `drizzle.config.ts`, `.env.example`.
+**Files:** Create `package.json`, `tsconfig.json`, `biome.json`, `bunfig.toml`, `drizzle.config.ts`, `.env.example`.
 
-**Step 1:** Tạo project và cài dependency:
+**Step 1:** Create the project and install dependencies:
 
 ```bash
 bun init -y
@@ -58,7 +58,7 @@ bun add hono drizzle-orm postgres postal-mime mailauth better-auth
 bun add -d @biomejs/biome typescript @types/bun drizzle-kit @electric-sql/pglite wrangler @cloudflare/workers-types standardwebhooks
 ```
 
-**Step 2:** Sửa `package.json`:
+**Step 2:** Edit `package.json`:
 
 ```json
 {
@@ -78,7 +78,7 @@ bun add -d @biomejs/biome typescript @types/bun drizzle-kit @electric-sql/pglite
 }
 ```
 
-**Step 3:** Tạo `tsconfig.json` (strict, `"types": ["bun", "@cloudflare/workers-types"]`, `"module": "ESNext"`, `"moduleResolution": "Bundler"`, `"noEmit": true`) và `biome.json` (`biome init`, bỏ qua `repo-ref`, `migrations`, `dist`). Tạo `drizzle.config.ts`:
+**Step 3:** Create `tsconfig.json` (strict, `"types": ["bun", "@cloudflare/workers-types"]`, `"module": "ESNext"`, `"moduleResolution": "Bundler"`, `"noEmit": true`) and `biome.json` (`biome init`, ignore `repo-ref`, `migrations`, `dist`). Create `drizzle.config.ts`:
 
 ```ts
 import { defineConfig } from 'drizzle-kit';
@@ -100,18 +100,18 @@ APP_HOST=localhost
 ALLOW_PRIVATE_WEBHOOKS=true
 ```
 
-**Step 5:** Chạy `bun run lint && bun run typecheck`. Kỳ vọng pass.
+**Step 5:** Run `bun run lint && bun run typecheck`. Expect pass.
 
 **Step 6:** Commit `chore: scaffold bun project with biome, drizzle and wrangler`.
 
-### Task 1.1: Schema DB và helper PGlite cho test
+### Task 1.1: DB schema and PGlite test helper
 
 **Files:**
-- Tạo `src/core/auth.ts`, `src/core/db/auth-schema.ts` (sinh tự động), `src/core/db/schema.ts`, `src/core/db/client.ts`
-- Tạo `test/db.ts`, `test/schema.test.ts`
-- Sinh `migrations/`
+- Create `src/core/auth.ts`, `src/core/db/auth-schema.ts` (generated), `src/core/db/schema.ts`, `src/core/db/client.ts`
+- Create `test/db.ts`, `test/schema.test.ts`
+- Generate `migrations/`
 
-**Step 1:** Tạo `src/core/auth.ts` ở dạng tối thiểu, để CLI sinh được các bảng auth. Cấu hình đầy đủ để dành cho P2.
+**Step 1:** Create a minimal `src/core/auth.ts` so the CLI can generate the auth tables. The full configuration is left for P2.
 
 ```ts
 import { betterAuth } from 'better-auth';
@@ -132,9 +132,9 @@ export function createAuth(db: Database) {
 export const auth = createAuth({} as Database);
 ```
 
-Chạy `bunx auth@latest generate --config src/core/auth.ts --output src/core/db/auth-schema.ts -y`. Kiểm tra lại đường import của plugin với version thực tế (skill `better-auth-best-practices`).
+Run `bunx auth@latest generate --config src/core/auth.ts --output src/core/db/auth-schema.ts -y`. Double-check the plugin import paths against the installed version (skill `better-auth-best-practices`).
 
-**Step 2:** Tạo `src/core/db/schema.ts`:
+**Step 2:** Create `src/core/db/schema.ts`:
 
 ```ts
 import { sql } from 'drizzle-orm';
@@ -248,7 +248,7 @@ export const inboundFailures = pgTable('inbound_failures', {
 export type EmailConfig = typeof emailConfigs.$inferSelect;
 ```
 
-**Step 3:** Tạo `src/core/db/client.ts`:
+**Step 3:** Create `src/core/db/client.ts`:
 
 ```ts
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
@@ -265,9 +265,9 @@ export function createDb(url: string) {
 }
 ```
 
-**Step 4:** Sinh migration bằng `bun run db:generate`. Kỳ vọng tạo ra `migrations/0000_*.sql`.
+**Step 4:** Generate the migration with `bun run db:generate`. Expect `migrations/0000_*.sql` to be created.
 
-**Step 5:** Tạo `test/db.ts`:
+**Step 5:** Create `test/db.ts`:
 
 ```ts
 import { PGlite } from '@electric-sql/pglite';
@@ -294,7 +294,7 @@ export async function seedConfig(db: Database, overrides: Partial<schema.EmailCo
 }
 ```
 
-**Step 6:** Viết test `test/schema.test.ts` cho unique index một phần:
+**Step 6:** Write `test/schema.test.ts` for the partial unique index:
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -309,15 +309,15 @@ test('same gmail may exist twice until one of them is claimed', async () => {
 });
 ```
 
-**Step 7:** Chạy `bun test test/schema.test.ts`. Kỳ vọng PASS. Nếu FAIL vì chưa có `migrations/` thì quay lại Step 4.
+**Step 7:** Run `bun test test/schema.test.ts`. Expect PASS. If it FAILs because `migrations/` is missing, go back to Step 4.
 
 **Step 8:** Commit `feat(db): add domain schema and pglite test helper`.
 
 ### Task 1.2: Crypto helper
 
-**Files:** Tạo `src/core/crypto.ts`, test `test/crypto.test.ts`.
+**Files:** Create `src/core/crypto.ts`, test `test/crypto.test.ts`.
 
-**Step 1: Test viết trước**
+**Step 1: Test first**
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -337,7 +337,7 @@ test('AES-GCM round-trips bytes and text, with a fresh IV each time', async () =
 });
 ```
 
-**Step 2:** Chạy `bun test test/crypto.test.ts`. Kỳ vọng FAIL vì module chưa tồn tại.
+**Step 2:** Run `bun test test/crypto.test.ts`. Expect FAIL because the module does not exist.
 
 **Step 3: Code**
 
@@ -379,15 +379,15 @@ export const decryptText = async (keyB64: string, s: string) =>
   new TextDecoder().decode(await decrypt(keyB64, fromBase64(s)));
 ```
 
-**Step 4:** Chạy `bun test test/crypto.test.ts`. Kỳ vọng PASS.
+**Step 4:** Run `bun test test/crypto.test.ts`. Expect PASS.
 
 **Step 5:** Commit `feat(core): add hashing and AES-GCM helpers`.
 
-### Task 1.3: Fixture ẩn danh
+### Task 1.3: Anonymized fixtures
 
-**Files:** Tạo `scripts/anonymize-fixtures.ts`. Sinh ra `test/fixtures/{cake,timo}/*.html`.
+**Files:** Create `scripts/anonymize-fixtures.ts`. Generates `test/fixtures/{cake,timo}/*.html`.
 
-**Step 1:** ✅ Đã có `mail-template/pii.json` (17 mục: tên, số TK, Gmail, mã tham chiếu, số dư; `PAYHOOK433417283` được đổi thành `PMH123456`, nên fixture CAKE tiền vào đã chứa sẵn mã đơn cho test). Tên và số TK xuất hiện nguyên văn trong HTML (không bị mã hoá entity), nên `replaceAll` là đủ.
+**Step 1:** ✅ `mail-template/pii.json` already exists (17 entries: names, account numbers, Gmail, reference codes, balances; `PAYHOOK433417283` is replaced with `PMH123456`, so the CAKE incoming fixture already contains an order code for tests). Names and account numbers appear verbatim in the HTML (not entity-encoded), so `replaceAll` is enough.
 
 **Step 2: Code**
 
@@ -412,15 +412,15 @@ for (const bank of ['cake', 'timo']) {
 }
 ```
 
-**Step 3:** Chạy `bun scripts/anonymize-fixtures.ts`, rồi kiểm tra không còn PII bằng `rg -f <(jq -r 'keys[]' mail-template/pii.json) test/fixtures`. Kỳ vọng không có dòng nào khớp.
+**Step 3:** Run `bun scripts/anonymize-fixtures.ts`, then check no PII remains with `rg -f <(jq -r 'keys[]' mail-template/pii.json) test/fixtures`. Expect no matching lines.
 
-**Step 4:** Mở từng file HTML ra kiểm tra bằng mắt (ngoài danh sách PII còn có thể có số dư, mã giao dịch…). Commit `test: add anonymized CAKE and Timo fixtures`.
+**Step 4:** Open each HTML file and inspect it by eye (beyond the PII list there may be balances, transaction codes…). Commit `test: add anonymized CAKE and Timo fixtures`.
 
-### Task 1.4: Bóc tách text và parser CAKE/Timo (TDD)
+### Task 1.4: Text extraction and CAKE/Timo parsers (TDD)
 
-**Files:** Tạo `src/core/text.ts`, `src/core/banks.ts`, test `test/banks.test.ts`.
+**Files:** Create `src/core/text.ts`, `src/core/banks.ts`, test `test/banks.test.ts`.
 
-**Step 1: Test viết trước.** Các giá trị kỳ vọng lấy từ fixture sau khi ẩn danh. Mở file HTML ra đọc rồi điền vào.
+**Step 1: Test first.** Expected values come from the anonymized fixtures. Open the HTML files, read them and fill them in.
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -463,7 +463,7 @@ test('normalizes gmail aliases', () => {
 });
 ```
 
-**Step 2:** Chạy `bun test test/banks.test.ts`. Kỳ vọng FAIL.
+**Step 2:** Run `bun test test/banks.test.ts`. Expect FAIL.
 
 **Step 3: Code `src/core/text.ts`**
 
@@ -581,15 +581,15 @@ export function extractOrderId(description: string, prefix: string) {
 }
 ```
 
-**Step 5:** Chạy `bun test test/banks.test.ts`. Kỳ vọng PASS. Nếu label của CAKE không khớp, in `lines` ra để xem, rồi sửa code hoặc sửa test cho đúng với dữ liệu thật.
+**Step 5:** Run `bun test test/banks.test.ts`. Expect PASS. If the CAKE labels don't match, print `lines` to inspect, then fix the code or the test to match the real data.
 
 **Step 6:** Commit `feat(core): parse CAKE and Timo notification emails`.
 
-### Task 1.5: Verify DKIM (TDD với email ký tổng hợp)
+### Task 1.5: DKIM verification (TDD with synthetic signed emails)
 
-**Files:** Tạo `src/core/dkim.ts` (gồm cả DoH resolver), `test/email.ts` (helper), test `test/dkim.test.ts`.
+**Files:** Create `src/core/dkim.ts` (including the DoH resolver), `test/email.ts` (helper), test `test/dkim.test.ts`.
 
-**Step 1:** Tạo helper `test/email.ts`:
+**Step 1:** Create helper `test/email.ts`:
 
 ```ts
 import { generateKeyPairSync } from 'node:crypto';
@@ -645,9 +645,9 @@ export const insertDate = (raw: Uint8Array) =>
   new Uint8Array(Buffer.from(`Date: Wed, 23 Sep 2026 20:42:19 -0700 (PDT)\r\n${Buffer.from(raw).toString('latin1')}`, 'latin1'));
 ```
 
-Tên option `maxBodyLength` (tag `l=`) phải kiểm tra lại trong `repo-ref/mailauth/lib/dkim/sign.js`.
+The option name `maxBodyLength` (tag `l=`) must be double-checked in `repo-ref/mailauth/lib/dkim/sign.js`.
 
-**Step 2: Test viết trước** (`test/dkim.test.ts`):
+**Step 2: Test first** (`test/dkim.test.ts`):
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -699,9 +699,9 @@ test.skipIf(!(await Bun.file('mail-template/pii.json').exists()))('real samples 
 });
 ```
 
-**Step 3:** Chạy `bun test test/dkim.test.ts`. Kỳ vọng FAIL.
+**Step 3:** Run `bun test test/dkim.test.ts`. Expect FAIL.
 
-**Step 4: Code `dohResolveTxt`** (đặt ở cuối `src/core/dkim.ts`)
+**Step 4: Code `dohResolveTxt`** (placed at the end of `src/core/dkim.ts`)
 
 ```ts
 /** DNS-over-HTTPS TXT lookup; works on Workers and Bun alike (Bun's node:dns TXT shape broke mailauth, research §3). */
@@ -754,15 +754,15 @@ export async function verifyBankDkim(raw: Uint8Array, bank: Bank, resolver: Reso
 }
 ```
 
-**Step 6:** Chạy `bun test test/dkim.test.ts`. Kỳ vọng PASS, và test với email thật cũng PASS trên máy dev. Nếu type của `mailauth` thiếu field thì mở rộng type cục bộ, không ép sang `any`.
+**Step 6:** Run `bun test test/dkim.test.ts`. Expect PASS, and the real-email test also PASSes on the dev machine. If `mailauth` types are missing fields, extend the types locally; don't cast to `any`.
 
 **Step 7:** Commit `feat(core): verify bank DKIM with To coverage and Timo Date quirk`.
 
-### Task 1.6: Ký webhook và kiểm tra URL
+### Task 1.6: Webhook signing and URL validation
 
-**Files:** Tạo `src/core/webhook.ts` (phần 1), test `test/webhook.test.ts` (phần 1).
+**Files:** Create `src/core/webhook.ts` (part 1), test `test/webhook.test.ts` (part 1).
 
-**Step 1: Test viết trước**
+**Step 1: Test first**
 
 ```ts
 import { expect, test } from 'bun:test';
@@ -799,9 +799,9 @@ test('self-host mode allows LAN http', () => {
 });
 ```
 
-**Step 2:** Chạy test. Kỳ vọng FAIL.
+**Step 2:** Run the test. Expect FAIL.
 
-**Step 3: Code** (phần đầu của `src/core/webhook.ts`)
+**Step 3: Code** (first part of `src/core/webhook.ts`)
 
 ```ts
 import { fromBase64, toBase64 } from './crypto';
@@ -846,13 +846,13 @@ export function validateWebhookUrl(raw: string, policy: UrlPolicy): string | nul
 }
 ```
 
-**Step 4:** Chạy test. Kỳ vọng PASS.
+**Step 4:** Run the test. Expect PASS.
 
 **Step 5:** Commit `feat(core): sign webhooks per Standard Webhooks and validate URLs`.
 
 ### Task 1.7: `ingestRawEmail`
 
-**Files:** Tạo `src/core/deps.ts`, `src/core/ingest.ts`, test `test/ingest.test.ts`.
+**Files:** Create `src/core/deps.ts`, `src/core/ingest.ts`, test `test/ingest.test.ts`.
 
 **Step 1: `src/core/deps.ts`**
 
@@ -873,15 +873,15 @@ export type Deps = {
 };
 ```
 
-**Step 2: Test viết trước** (`test/ingest.test.ts`). Dùng `createTestDb`, `seedConfig` và `signedEmail`, lấy HTML từ fixture CAKE tiền vào sau khi đã sửa `Nội dung giao dịch` thành `PMH123456`. Các case:
-- `stored`: có dòng mới trong `transactions`, `orderId = '123456'`, có một `webhook_deliveries` ở trạng thái `pending`, `scheduleDelivery` được gọi với `(id, 0)`, `last_ingest_at` đã được đặt.
-- Cùng raw gửi lần hai: `duplicate`, không tạo thêm delivery.
-- `To: other@gmail.com`: `rejected` với lý do `to_mismatch`, có một dòng `inbound_failures`, `ingest_error = 'to_mismatch'`.
-- `To: O.w.n.e.r+x@googlemail.com`: `stored` (chuẩn hoá Gmail).
-- Chữ ký `d=evil.test`: `rejected` với lý do `dkim_failed`.
-- `from: news@shop.test`: `ignored`, không lưu gì.
-- Config không có `webhook_url`: `stored`, không tạo delivery.
-- Tiền ra (`direction = out`) có chứa mã: không tạo delivery.
+**Step 2: Test first** (`test/ingest.test.ts`). Use `createTestDb`, `seedConfig` and `signedEmail`, with HTML from the CAKE incoming fixture after changing `Nội dung giao dịch` to `PMH123456`. Cases:
+- `stored`: new row in `transactions`, `orderId = '123456'`, one `webhook_deliveries` row in `pending`, `scheduleDelivery` called with `(id, 0)`, `last_ingest_at` set.
+- Same raw sent a second time: `duplicate`, no extra delivery created.
+- `To: other@gmail.com`: `rejected` with reason `to_mismatch`, one `inbound_failures` row, `ingest_error = 'to_mismatch'`.
+- `To: O.w.n.e.r+x@googlemail.com`: `stored` (Gmail normalization).
+- Signature `d=evil.test`: `rejected` with reason `dkim_failed`.
+- `from: news@shop.test`: `ignored`, nothing stored.
+- Config without `webhook_url`: `stored`, no delivery created.
+- Outgoing money (`direction = out`) containing a code: no delivery created.
 
 ```ts
 const makeDeps = (db: Database) => {
@@ -894,7 +894,7 @@ const makeDeps = (db: Database) => {
 };
 ```
 
-**Step 3:** Chạy test. Kỳ vọng FAIL.
+**Step 3:** Run the test. Expect FAIL.
 
 **Step 4: Code `src/core/ingest.ts`**
 
@@ -953,36 +953,36 @@ export async function ingestRawEmail(deps: Deps, config: EmailConfig, raw: Uint8
 }
 ```
 
-Hàm `store()` đặt trong cùng file, dưới 50 dòng:
-1. Mở `deps.db.transaction`.
-2. Chạy `UPDATE email_configs SET last_ingest_at = now(), ingest_error = null`. Việc này có thể đụng unique index một phần: bắt lỗi Postgres mã `23505` và trả `rejected: to_mismatch`, vì Gmail này đã bị một config khác claim.
-3. `INSERT transactions ... onConflictDoNothing({ target: transactions.messageId }).returning({ id })`. Không có dòng nào trả về thì return `duplicate`.
-4. Tính `orderId = txn.direction === 'in' ? extractOrderId(...) : null`.
-5. Nếu có `orderId` và `config.webhookUrl` thì `INSERT webhook_deliveries { payload: buildPayload(...), nextAttemptAt: new Date() }`.
+The `store()` function lives in the same file, under 50 lines:
+1. Open `deps.db.transaction`.
+2. Run `UPDATE email_configs SET last_ingest_at = now(), ingest_error = null`. This may hit the partial unique index: catch Postgres error code `23505` and return `rejected: to_mismatch`, because this Gmail has already been claimed by another config.
+3. `INSERT transactions ... onConflictDoNothing({ target: transactions.messageId }).returning({ id })`. If no row is returned, return `duplicate`.
+4. Compute `orderId = txn.direction === 'in' ? extractOrderId(...) : null`.
+5. If there is an `orderId` and `config.webhookUrl`, `INSERT webhook_deliveries { payload: buildPayload(...), nextAttemptAt: new Date() }`.
 
-`buildPayload` nằm trong `webhook.ts` và trả về đúng shape ở design §3.1.
+`buildPayload` lives in `webhook.ts` and returns exactly the shape in design §3.1.
 
-**Step 5:** Chạy `bun test test/ingest.test.ts`. Kỳ vọng PASS toàn bộ.
+**Step 5:** Run `bun test test/ingest.test.ts`. Expect all PASS.
 
 **Step 6:** Commit `feat(core): ingest raw bank emails into transactions`.
 
-### Task 1.8: `deliver()` và bảo trì định kỳ
+### Task 1.8: `deliver()` and periodic maintenance
 
-**Files:** Thêm vào `src/core/webhook.ts` (phần 2). Tạo `src/core/maintenance.ts`. Thêm test vào `test/webhook.test.ts`, tạo `test/maintenance.test.ts`.
+**Files:** Add to `src/core/webhook.ts` (part 2). Create `src/core/maintenance.ts`. Add tests to `test/webhook.test.ts`, create `test/maintenance.test.ts`.
 
-**Step 1: Test viết trước.** Seed một delivery bằng helper ingest, `fetch` giả trả về status theo kịch bản:
-- 200: `success`, có một attempt, `webhook-id` bằng delivery id, chữ ký verify được bằng `standardwebhooks`.
-- 500: `retrying`, `attempt_count = 1`, `next_attempt_at` cách hiện tại khoảng 10 giây, `scheduleDelivery` được gọi với `(id, 10)`.
-- Lặp lỗi 10 lần (mỗi lần đặt lại `next_attempt_at = now()` trước khi gọi): lần thứ 10 chuyển sang `failed`.
-- Phản hồi 301: tính là lỗi.
-- `fetch` ném `TimeoutError`: attempt có `error = 'timeout'`.
-- **Claim:** `await Promise.all([deliver(d, id), deliver(d, id)])` mà fetch giả chỉ được gọi **một lần**.
-- Retry thủ công mà vẫn lỗi: giữ nguyên status (`failed` vẫn là `failed`, `success` vẫn là `success`), `scheduleDelivery` không được gọi.
-- `webhook_url` bị đổi thành `https://127.0.0.1`: attempt có `error = 'ip_not_allowed'`, không gọi fetch.
+**Step 1: Test first.** Seed a delivery via the ingest helper; a fake `fetch` returns statuses per scenario:
+- 200: `success`, one attempt, `webhook-id` equals the delivery id, signature verifies with `standardwebhooks`.
+- 500: `retrying`, `attempt_count = 1`, `next_attempt_at` about 10 seconds from now, `scheduleDelivery` called with `(id, 10)`.
+- Fail 10 times in a row (resetting `next_attempt_at = now()` before each call): the 10th becomes `failed`.
+- 301 response: counts as a failure.
+- `fetch` throws `TimeoutError`: attempt has `error = 'timeout'`.
+- **Claim:** `await Promise.all([deliver(d, id), deliver(d, id)])` with the fake fetch called only **once**.
+- Manual retry that still fails: status unchanged (`failed` stays `failed`, `success` stays `success`), `scheduleDelivery` not called.
+- `webhook_url` changed to `https://127.0.0.1`: attempt has `error = 'ip_not_allowed'`, fetch not called.
 
-**Step 2:** Chạy test. Kỳ vọng FAIL.
+**Step 2:** Run the test. Expect FAIL.
 
-**Step 3: Code** (phần 2 của `webhook.ts`)
+**Step 3: Code** (part 2 of `webhook.ts`)
 
 ```ts
 export const RETRY_SCHEDULE = [10, 10, 20, 30, 50, 3600, 7200, 14400, 28800];
@@ -1032,11 +1032,11 @@ export async function deliver(deps: Deps, id: string, trigger: Trigger = 'schedu
 
 `transition()`:
 - 2xx: `success`, `nextAttemptAt: null`.
-- Lỗi khi `manual`: **giữ nguyên status** (design §3.2), `nextAttemptAt: null`.
-- Lỗi khi còn lịch: `delay = RETRY_SCHEDULE[delivery.attemptCount]` → `retrying`, `nextAttemptAt: now + delay`, rồi gọi `deps.scheduleDelivery(id, delay)`.
-- Lỗi khi hết lịch: `failed`.
+- Failure on `manual`: **keep status unchanged** (design §3.2), `nextAttemptAt: null`.
+- Failure with schedule remaining: `delay = RETRY_SCHEDULE[delivery.attemptCount]` → `retrying`, `nextAttemptAt: now + delay`, then call `deps.scheduleDelivery(id, delay)`.
+- Failure with schedule exhausted: `failed`.
 
-Luôn chạy `attemptCount + 1` và cập nhật `lastStatusCode`. `recordAttempt` chèn vào `webhook_attempts` với `attemptNumber = delivery.attemptCount + 1`.
+Always apply `attemptCount + 1` and update `lastStatusCode`. `recordAttempt` inserts into `webhook_attempts` with `attemptNumber = delivery.attemptCount + 1`.
 
 **Step 4: Code `src/core/maintenance.ts`**
 
@@ -1058,22 +1058,22 @@ export async function runMaintenance(deps: Deps) {
 
 ```
 
-Test: delivery bị kẹt thì được lên lịch lại; bản ghi cũ bị xoá; config chưa từng nhận email quá 7 ngày bị xoá. Dùng `UPDATE ... SET created_at = now() - interval '31 days'` để tạo dữ liệu cũ.
+Tests: a stuck delivery is rescheduled; old rows are deleted; a config that never received an email for over 7 days is deleted. Use `UPDATE ... SET created_at = now() - interval '31 days'` to create old data.
 
-**Step 5:** Chạy `bun test`. Kỳ vọng tất cả PASS.
+**Step 5:** Run `bun test`. Expect all PASS.
 
 **Step 6:** Commit `feat(core): deliver webhooks with lease claim, retry schedule and maintenance`.
 
-### Task 1.9: Hono app và `POST /api/ingest`
+### Task 1.9: Hono app and `POST /api/ingest`
 
-**Files:** Tạo `src/api/app.ts`, test `test/api.test.ts`.
+**Files:** Create `src/api/app.ts`, test `test/api.test.ts`.
 
-**Step 1: Test viết trước**
-- Không có token hoặc token sai: 401.
-- Token đúng và raw hợp lệ: `200 {ok:true,status:'stored'}`.
-- `db` ném lỗi: 500 với `{error:{code:'internal'}}` (Apps Script sẽ giữ cursor).
+**Step 1: Test first**
+- Missing or wrong token: 401.
+- Correct token and valid raw: `200 {ok:true,status:'stored'}`.
+- `db` throws: 500 with `{error:{code:'internal'}}` (Apps Script keeps its cursor).
 
-Gọi bằng `app.request('/api/ingest', { method: 'POST', headers: { authorization: 'Bearer t', 'content-type': 'message/rfc822' }, body: raw })`.
+Call it with `app.request('/api/ingest', { method: 'POST', headers: { authorization: 'Bearer t', 'content-type': 'message/rfc822' }, body: raw })`.
 
 **Step 2: Code**
 
@@ -1119,13 +1119,13 @@ export function createApp(makeDeps: (c: Context) => Deps) {
 export type AppType = ReturnType<typeof createApp>;
 ```
 
-**Step 3:** Chạy `bun test test/api.test.ts`. Kỳ vọng PASS.
+**Step 3:** Run `bun test test/api.test.ts`. Expect PASS.
 
 **Step 4:** Commit `feat(api): add hono app with ingest endpoint`.
 
-### Task 1.10: Entry cho Bun (Self-host/dev) và script tạo config
+### Task 1.10: Bun entry (Self-host/dev) and config creation script
 
-**Files:** Tạo `src/server.ts`, `scripts/create-config.ts`.
+**Files:** Create `src/server.ts`, `scripts/create-config.ts`.
 
 **Step 1: `src/server.ts`**
 
@@ -1165,26 +1165,26 @@ setInterval(() => runMaintenance(deps).catch(console.error), 60 * 60 * 1000);
 export default { port: Number(env.PORT ?? 3000), fetch: createApp(() => deps).fetch };
 ```
 
-**Step 2:** Tạo `src/core/apps-script.ts` với `renderAppsScript(url, token)`: đọc `apps-script/Code.gs` (import dạng text) rồi thay hai placeholder. P2 dùng lại hàm này. Sau đó viết `scripts/create-config.ts <gmail> <webhookUrl>`:
-1. Tạo user dev.
-2. Tạo config với `ingestTokenHash = sha256Hex(token)` và `webhookSecretEnc = encryptText(newWebhookSecret())`.
-3. In ra token, secret và nội dung `apps-script/Code.gs` đã thay placeholder.
+**Step 2:** Create `src/core/apps-script.ts` with `renderAppsScript(url, token)`: read `apps-script/Code.gs` (imported as text) and replace the two placeholders. P2 reuses this function. Then write `scripts/create-config.ts <gmail> <webhookUrl>`:
+1. Create a dev user.
+2. Create a config with `ingestTokenHash = sha256Hex(token)` and `webhookSecretEnc = encryptText(newWebhookSecret())`.
+3. Print the token, the secret and the contents of `apps-script/Code.gs` with placeholders replaced.
 
-Mục đích là test tay P1 trước khi có dashboard.
+The purpose is to test P1 by hand before the dashboard exists.
 
-**Step 3: Kiểm tra bằng tay**
-1. Postgres đã chạy sẵn trong container `paymailhook-postgres` (`docker start paymailhook-postgres` nếu nó đang dừng).
-2. Chạy `bun run db:migrate`.
-3. Chạy `bun run dev` trong tmux.
-4. Gửi thử: `curl -X POST localhost:3000/api/ingest -H "authorization: Bearer <token>" --data-binary @mail-template/cake/<file>.eml`.
+**Step 3: Manual check**
+1. Postgres is already running in the `paymailhook-postgres` container (`docker start paymailhook-postgres` if it is stopped).
+2. Run `bun run db:migrate`.
+3. Run `bun run dev` in tmux.
+4. Send a test: `curl -X POST localhost:3000/api/ingest -H "authorization: Bearer <token>" --data-binary @mail-template/cake/<file>.eml`.
 
-Kỳ vọng nhận `status: 'stored'`. Nếu Gmail trong config khác với `To` của email mẫu thì nhận `to_mismatch`.
+Expect `status: 'stored'`. If the Gmail in the config differs from the sample email's `To`, expect `to_mismatch`.
 
 **Step 4:** Commit `feat: add bun server entry and dev config script`.
 
-### Task 1.11: Entry cho Workers
+### Task 1.11: Workers entry
 
-**Files:** Tạo `src/worker.ts`, `wrangler.jsonc`.
+**Files:** Create `src/worker.ts`, `wrangler.jsonc`.
 
 **Step 1: `wrangler.jsonc`**
 
@@ -1263,21 +1263,21 @@ export default {
 } satisfies ExportedHandler<Env, { id: string; trigger: Trigger }>;
 ```
 
-`createApp()` được gọi cho mỗi request, vì việc đăng ký route rất rẻ. Cách đóng connection này cần đối chiếu lại với tài liệu Hyperdrive + postgres.js mới nhất (context7).
+`createApp()` is called per request, since route registration is cheap. This connection-closing approach must be checked against the latest Hyperdrive + postgres.js docs (context7).
 
-**Step 3:** Chạy `bun run build:worker`. Kỳ vọng build thành công, không có lỗi `node:sqlite`, và kích thước gzip dưới 3MB.
+**Step 3:** Run `bun run build:worker`. Expect a successful build, no `node:sqlite` errors, and gzip size under 3MB.
 
 **Step 4:** Commit `feat: add cloudflare worker entry with queue consumer and cron`.
 
 ### Task 1.12: Apps Script
 
-**Files:** Tạo `apps-script/Code.gs`, test `test/apps-script.test.ts`.
+**Files:** Create `apps-script/Code.gs`, test `test/apps-script.test.ts`.
 
-**Step 1: Test viết trước.** Nạp script bằng `new Function('GmailApp', 'UrlFetchApp', 'PropertiesService', 'LockService', 'ScriptApp', code + '; return { poll, setup };')` với các object giả. Các case:
-- Mọi response đều 200 kèm `ok:true`: cursor bằng thời điểm của message mới nhất.
-- Có một response 500: cursor giữ nguyên.
-- Hai message nằm trong cùng thread: cả hai đều được gửi.
-- Phản hồi 200 nhưng body không phải JSON: cursor giữ nguyên.
+**Step 1: Test first.** Load the script with `new Function('GmailApp', 'UrlFetchApp', 'PropertiesService', 'LockService', 'ScriptApp', code + '; return { poll, setup };')` using fake objects. Cases:
+- All responses are 200 with `ok:true`: cursor equals the newest message's time.
+- One response is 500: cursor unchanged.
+- Two messages in the same thread: both are sent.
+- 200 response but the body is not JSON: cursor unchanged.
 
 **Step 2: Code** (skill `google-apps-script`)
 
@@ -1328,25 +1328,25 @@ function poll() {
 }
 ```
 
-**Step 3:** Chạy `bun test test/apps-script.test.ts`. Kỳ vọng PASS.
+**Step 3:** Run `bun test test/apps-script.test.ts`. Expect PASS.
 
 **Step 4:** Commit `feat: add gmail apps script ingest client`.
 
-### Task 1.13: Spike với Gmail thật và CI
+### Task 1.13: Real Gmail spike and CI
 
-**Step 1: Spike thủ công**
-1. Deploy Worker lên Cloudflare (tạo Neon, Hyperdrive và Queue theo hướng dẫn trong README).
-2. Chạy `scripts/create-config.ts` trỏ tới DB Neon.
-3. Dán `Code.gs` vào Gmail thật và chạy `setup()`.
-4. Chuyển 1.000đ với nội dung `PMH1`.
+**Step 1: Manual spike**
+1. Deploy the Worker to Cloudflare (create Neon, Hyperdrive and Queue per the README instructions).
+2. Run `scripts/create-config.ts` pointed at the Neon DB.
+3. Paste `Code.gs` into a real Gmail account and run `setup()`.
+4. Transfer 1,000 VND with the description `PMH1`.
 
-Kỳ vọng: có transaction, webhook tới được `https://webhook.site/...`, và chữ ký verify được. Ghi lại kết quả vào research.md §3:
-- `getRawContent()` có verify DKIM được không.
-- CPU time đo trong Workers Logs, so với giới hạn 10ms.
+Expect: a transaction exists, the webhook reaches `https://webhook.site/...`, and the signature verifies. Record the results in research.md §3:
+- Whether `getRawContent()` passes DKIM verification.
+- CPU time measured in Workers Logs, compared with the 10ms limit.
 
-Nếu vượt 10ms CPU thì chuyển bước verify và parse sang queue consumer (xem ghi chú ở README).
+If it exceeds 10ms CPU, move the verify and parse steps into the queue consumer (see the note in README).
 
-**Step 2: CI**, tạo `.github/workflows/ci.yml`:
+**Step 2: CI**, create `.github/workflows/ci.yml`:
 
 ```yaml
 name: ci
@@ -1364,50 +1364,50 @@ jobs:
       - run: bun run build:worker
 ```
 
-**Step 3:** Push lên GitHub và kiểm tra CI xanh. Commit `ci: run checks and worker bundle build`.
+**Step 3:** Push to GitHub and check CI is green. Commit `ci: run checks and worker bundle build`.
 
-**Step 4:** Chạy `ponytail-review` cho toàn bộ P1 và xử lý các finding trước khi sang P2.
+**Step 4:** Run `ponytail-review` over all of P1 and address the findings before moving to P2.
 
 ---
 
-# P2: Tài khoản và cấu hình
+# P2: Accounts and configuration
 
-Plan chi tiết viết khi bắt đầu P2. Các task:
+The detailed plan is written when P2 starts. Tasks:
 
-| Task | Files | Test / Xong khi |
+| Task | Files | Test / Done when |
 |---|---|---|
-| 2.1 Cấu hình better-auth đầy đủ (design §4.4): Google tuỳ chọn, rate limit lưu DB, cookie cache, user đầu tiên thành admin, `ALLOW_SIGNUP`. Cài `zod` và `@hono/zod-validator`, thêm `BETTER_AUTH_*` vào env/secrets | `src/core/auth.ts` | User đầu tiên có `role=admin`; khi `ALLOW_SIGNUP=false` thì sign-up bị chặn |
-| 2.2 Middleware: gắn `/api/auth/*`, `csrf()`, `requireUser` (cookie hoặc API key) | `src/api/app.ts`, `src/api/auth.ts` | Không có session thì 401; API key dùng như session; POST dùng cookie mà thiếu Origin thì 403 |
-| 2.3 CRUD email config: POST trả token và `Code.gs` một lần (dùng `renderAppsScript` từ P1); PATCH validate URL; rotate token và secret; test webhook | `src/api/email-configs.ts` | Truy cập config của user khác trả 404; token cũ sau khi rotate trả 401 |
-| 2.4 API giao dịch và delivery (phân trang keyset), retry/resend | `src/api/transactions.ts`, `src/api/deliveries.ts` | Phân trang ổn định; retry thủ công đúng như §3.5 |
-| 2.5 SPA: Vite + React Router + TanStack Query + shadcn, better-auth client, `hc<AppType>` | `web/*`, `vite.config.ts`, cập nhật `wrangler.jsonc` (assets + `run_worker_first: ["/api/*"]`) | `bun run build` rồi truy cập `/`, SPA load được; F5 ở `/transactions` vẫn vào SPA |
-| 2.6 Các trang: đăng nhập/đăng ký, danh sách config, onboarding Apps Script (copy script, trạng thái `last_ingest_at` và `ingest_error`), giao dịch, webhook log | `web/routes/*` | Test tay đầy đủ luồng từ tạo config tới khi nhận webhook |
+| 2.1 Full better-auth configuration (design §4.4): optional Google, DB-backed rate limit, cookie cache, first user becomes admin, `ALLOW_SIGNUP`. Install `zod` and `@hono/zod-validator`, add `BETTER_AUTH_*` to env/secrets | `src/core/auth.ts` | First user has `role=admin`; sign-up is blocked when `ALLOW_SIGNUP=false` |
+| 2.2 Middleware: mount `/api/auth/*`, `csrf()`, `requireUser` (cookie or API key) | `src/api/app.ts`, `src/api/auth.ts` | No session → 401; API key works like a session; cookie POST without Origin → 403 |
+| 2.3 Email config CRUD: POST returns the token and `Code.gs` once (using `renderAppsScript` from P1); PATCH validates the URL; rotate token and secret; test webhook | `src/api/email-configs.ts` | Accessing another user's config returns 404; old token after rotation returns 401 |
+| 2.4 Transaction and delivery API (keyset pagination), retry/resend | `src/api/transactions.ts`, `src/api/deliveries.ts` | Stable pagination; manual retry behaves as in §3.5 |
+| 2.5 SPA: Vite + React Router + TanStack Query + shadcn, better-auth client, `hc<AppType>` | `web/*`, `vite.config.ts`, update `wrangler.jsonc` (assets + `run_worker_first: ["/api/*"]`) | `bun run build` then visiting `/` loads the SPA; F5 on `/transactions` still serves the SPA |
+| 2.6 Pages: sign in/sign up, config list, Apps Script onboarding (copy script, `last_ingest_at` and `ingest_error` status), transactions, webhook log | `web/routes/*` | Manual test of the full flow from creating a config to receiving a webhook |
 
 # P2.5: Self-host
 
-| Task | Files | Test / Xong khi |
+| Task | Files | Test / Done when |
 |---|---|---|
-| 2.7 IMAP listener (design §2.6): mở mailbox special-use `\All`, quét bằng `gmraw`, IDLE với `maxIdleTime` 25 phút, backoff khi reconnect, auth fail thì dừng | `src/imap.ts`, sửa `src/server.ts` | Test `scan()` với client giả; test tay với Gmail thật (rút mạng xong tự nối lại) |
-| 2.8 UI cho source IMAP: nhập App Password (lưu mã hoá) | `web/routes/*`, `src/api/email-configs.ts` | Password không bao giờ bị trả về qua API |
-| 2.9 Dockerfile (bun build, người dùng không phải root) và `docker-compose.yml` (app + postgres + chạy migrate khi khởi động) | `Dockerfile`, `docker-compose.yml` | `docker compose up` rồi mở `localhost:3000` là đăng ký được, trở thành admin |
-| 2.10 README: hướng dẫn deploy Hosted (Neon, Hyperdrive, Queue, secrets) và Self-host | `README.md` | Người chưa biết gì làm theo được từ đầu tới cuối |
+| 2.7 IMAP listener (design §2.6): open the special-use `\All` mailbox, scan with `gmraw`, IDLE with `maxIdleTime` 25 minutes, backoff on reconnect, stop on auth failure | `src/imap.ts`, edit `src/server.ts` | Test `scan()` with a fake client; manual test with real Gmail (unplug the network, it reconnects on its own) |
+| 2.8 UI for the IMAP source: enter App Password (stored encrypted) | `web/routes/*`, `src/api/email-configs.ts` | Password is never returned by the API |
+| 2.9 Dockerfile (bun build, non-root user) and `docker-compose.yml` (app + postgres + migrate on startup) | `Dockerfile`, `docker-compose.yml` | `docker compose up`, open `localhost:3000`, sign up and become admin |
+| 2.10 README: deployment guide for Hosted (Neon, Hyperdrive, Queue, secrets) and Self-host | `README.md` | A newcomer can follow it end to end |
 
-# P3: Dashboard hoàn chỉnh
+# P3: Complete dashboard
 
-| Task | Files | Test / Xong khi |
+| Task | Files | Test / Done when |
 |---|---|---|
-| 3.1 Giao dịch realtime: poll bằng `refetchInterval` 5 giây khi tab đang hiện, dừng khi tab ẩn (để Neon được ngủ) | `web/routes/transactions.tsx` | Giao dịch mới xuất hiện trong vòng ≤6 giây |
-| 3.2 `GET /api/qr`: VietQR (`vietnam-qr-pay`) render SVG (`qrcode`), tham số `acc`, `bank`, `amount`, `des` | `src/api/qr.ts` | Payload QR decode lại đúng; app ngân hàng quét được (test tay) |
-| 3.3 Trang tạo QR | `web/routes/qr.tsx` | |
-| 3.4 Chia sẻ giao dịch: chốt phạm vi trước (một giao dịch hay danh sách), rồi thêm `share_token` bằng migration | migration, `src/api/share.ts`, `web/routes/share.tsx` | Link công khai không lộ `webhook_url` hay thông tin config |
-| 3.5 Trang Guide (payload, verify chữ ký bằng `standardwebhooks` cho Node/PHP/Python, §3.6) và trang Privacy | `web/routes/guide.tsx`, `privacy.tsx` | |
-| 3.6 E2E Playwright: đăng ký, tạo config, gửi email ký tổng hợp vào `/api/ingest`, thấy giao dịch và delivery `success` trên UI | `e2e/*` | CI chạy E2E |
+| 3.1 Realtime transactions: poll with `refetchInterval` 5 seconds while the tab is visible, stop when hidden (so Neon can sleep) | `web/routes/transactions.tsx` | New transactions appear within ≤6 seconds |
+| 3.2 `GET /api/qr`: VietQR (`vietnam-qr-pay`) rendered as SVG (`qrcode`), params `acc`, `bank`, `amount`, `des` | `src/api/qr.ts` | QR payload decodes back correctly; banking apps can scan it (manual test) |
+| 3.3 QR generator page | `web/routes/qr.tsx` | |
+| 3.4 Transaction sharing: settle the scope first (a single transaction or a list), then add `share_token` via migration | migration, `src/api/share.ts`, `web/routes/share.tsx` | Public link does not expose `webhook_url` or config details |
+| 3.5 Guide page (payload, signature verification with `standardwebhooks` for Node/PHP/Python, §3.6) and Privacy page | `web/routes/guide.tsx`, `privacy.tsx` | |
+| 3.6 Playwright E2E: sign up, create config, send a synthetic signed email to `/api/ingest`, see the transaction and a `success` delivery in the UI | `e2e/*` | CI runs E2E |
 
-# P4: Mở rộng
+# P4: Extensions
 
-| Task | Files | Test / Xong khi |
+| Task | Files | Test / Done when |
 |---|---|---|
-| 4.1 Web Push (VAPID, học `saasmail/worker/src/lib/web-push.ts`): bảng `push_subscriptions`, gửi push khi có tiền vào | migration, `src/core/push.ts`, `public/sw.js` | Nhận được notification trên Chrome |
-| 4.2 Admin UI dùng endpoint của admin plugin: danh sách user, phân quyền, khoá tài khoản, đặt lại mật khẩu | `web/routes/admin/*` | User không phải admin bị chặn |
-| 4.3 MCP server `/mcp` (`@hono/mcp`, xác thực bằng API key, học từ saasmail): tools `list_transactions`, `get_payment_status(orderId)` | `src/api/mcp.ts` | MCP inspector gọi tool được; route đăng ký **trước** SPA fallback |
-| 4.4 Gmail OAuth (tuỳ chọn): `gmail.readonly`, `users.watch` với Pub/Sub, gia hạn watch bằng cron, `history.list`, `messages.get(format=raw)` rồi đưa vào `ingestRawEmail`. Học `inbox-zero/apps/web/utils/gmail/watch.ts`. Thêm `source = gmail_oauth` bằng migration | `src/core/gmail-oauth.ts`, `src/api/google-webhook.ts` | Tới 100 user test; có cảnh báo "unsafe" cho tới khi qua CASA |
+| 4.1 Web Push (VAPID, learn from `saasmail/worker/src/lib/web-push.ts`): `push_subscriptions` table, send a push on incoming money | migration, `src/core/push.ts`, `public/sw.js` | Notification received in Chrome |
+| 4.2 Admin UI using the admin plugin endpoints: user list, roles, ban accounts, reset passwords | `web/routes/admin/*` | Non-admin users are blocked |
+| 4.3 MCP server `/mcp` (`@hono/mcp`, API key auth, learn from saasmail): tools `list_transactions`, `get_payment_status(orderId)` | `src/api/mcp.ts` | MCP inspector can call the tools; route registered **before** the SPA fallback |
+| 4.4 Gmail OAuth (optional): `gmail.readonly`, `users.watch` with Pub/Sub, renew watch via cron, `history.list`, `messages.get(format=raw)` then feed into `ingestRawEmail`. Learn from `inbox-zero/apps/web/utils/gmail/watch.ts`. Add `source = gmail_oauth` via migration | `src/core/gmail-oauth.ts`, `src/api/google-webhook.ts` | Up to 100 test users; "unsafe" warning shown until CASA is passed |
