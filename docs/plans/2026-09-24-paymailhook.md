@@ -14,6 +14,23 @@
 
 ---
 
+## Bắt đầu session mới
+
+Môi trường đã được chuẩn bị sẵn (2026-09-24):
+
+| Thứ | Trạng thái |
+|---|---|
+| Bun 1.3.14, Docker, tmux | ✅ Có sẵn |
+| Postgres 17 cho dev | ✅ Container `paymailhook-postgres` ở `localhost:5435` (user/pass `postgres`, db `paymailhook`, volume `paymailhook-pgdata`, tự khởi động lại). Các cổng 5432 và 5434 đã có project khác dùng |
+| Node | ⚠️ v20, trong khi wrangler cần ≥22. **Chạy wrangler bằng Bun** (`bun node_modules/wrangler/bin/wrangler.js …`): lệnh `deploy --dry-run` đã được kiểm chứng chạy được. `wrangler dev` thì **không** dùng được vì glibc 2.31 không chạy nổi `workerd` (xem research §3) |
+| Email mẫu thật | ✅ `mail-template/{cake,timo}/*.eml` và `mail-template/pii.json`, đều đã gitignore |
+| Repo tham khảo | ✅ `repo-ref/` (đã gitignore), xem research §4 |
+| `.env` | ❌ **Chưa có.** Theo CLAUDE.md, agent không được tạo hay sửa `.env*`. Người dùng tự chạy `cp .env.example .env` rồi điền `ENCRYPTION_KEY=$(openssl rand -base64 32)` |
+
+Lệnh mở đầu cho agent: *"Đọc CLAUDE.md, README.md, docs/design.md và plan này, rồi làm Task 1.0."*
+
+---
+
 ## Quy ước chung
 
 - **Kiểm tra trước mỗi commit:** `bun run check`, tức Biome, `tsc --noEmit` và `bun test` đều phải pass.
@@ -56,7 +73,7 @@ bun add -d @biomejs/biome typescript @types/bun drizzle-kit @electric-sql/pglite
     "check": "biome check . && tsc --noEmit && bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "build:worker": "wrangler deploy --dry-run --outdir dist"
+    "build:worker": "bun node_modules/wrangler/bin/wrangler.js deploy --dry-run --outdir dist"
   }
 }
 ```
@@ -77,7 +94,7 @@ export default defineConfig({
 **Step 4:** `.env.example`:
 
 ```
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/paymailhook
+DATABASE_URL=postgres://postgres:postgres@localhost:5435/paymailhook
 ENCRYPTION_KEY=            # openssl rand -base64 32
 APP_HOST=localhost
 ALLOW_PRIVATE_WEBHOOKS=true
@@ -370,7 +387,7 @@ export const decryptText = async (keyB64: string, s: string) =>
 
 **Files:** Tạo `scripts/anonymize-fixtures.ts`. Sinh ra `test/fixtures/{cake,timo}/*.html`.
 
-**Step 1:** Tạo `mail-template/pii.json` trên máy local (thư mục đã gitignore, **không commit**). Nội dung là một map từ giá trị thật sang giá trị giả, ví dụ `{ "<họ tên thật>": "NGUYEN VAN A", "<số TK thật>": "0123456789" }`.
+**Step 1:** ✅ Đã có `mail-template/pii.json` (17 mục: tên, số TK, Gmail, mã tham chiếu, số dư; `PAYHOOK433417283` được đổi thành `PMH123456`, nên fixture CAKE tiền vào đã chứa sẵn mã đơn cho test). Tên và số TK xuất hiện nguyên văn trong HTML (không bị mã hoá entity), nên `replaceAll` là đủ.
 
 **Step 2: Code**
 
@@ -1156,7 +1173,7 @@ export default { port: Number(env.PORT ?? 3000), fetch: createApp(() => deps).fe
 Mục đích là test tay P1 trước khi có dashboard.
 
 **Step 3: Kiểm tra bằng tay**
-1. Chạy `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:17`.
+1. Postgres đã chạy sẵn trong container `paymailhook-postgres` (`docker start paymailhook-postgres` nếu nó đang dừng).
 2. Chạy `bun run db:migrate`.
 3. Chạy `bun run dev` trong tmux.
 4. Gửi thử: `curl -X POST localhost:3000/api/ingest -H "authorization: Bearer <token>" --data-binary @mail-template/cake/<file>.eml`.
