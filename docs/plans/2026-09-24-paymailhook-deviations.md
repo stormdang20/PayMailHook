@@ -391,3 +391,45 @@ Run against the dev Postgres container (`bun run db:migrate` works as-is because
 - `test/email.ts`: unused `messageId` option removed.
 - `src/core/webhook.ts`: `RETRY_SCHEDULE` no longer exported (only used inside the file).
 - Everything else kept: schema/auth exports are required by drizzle and better-auth; `AppType`, `AppEnv`, `createAuth` are for P2.
+
+---
+
+# P2: Accounts and configuration
+
+P2 was only described at task level in the plan. Each P2 entry below records what was decided while implementing it.
+
+## Task 2.1: Full better-auth configuration
+
+### 2.1-a: API keys are not turned into sessions (`enableSessionForAPIKeys` off)
+
+- **Design §4.4:** `apiKey({ enableSessionForAPIKeys: true })` so `getSession()` accepts API keys.
+- **Done:** the option is off. Task 2.2's `requireUser` tries the session first, then verifies the `x-api-key` header with `auth.api.verifyApiKey` (same shape as saasmail's "session → API key" middleware chain).
+- **Cause:** the installed plugin documents this option as "⚠︎ not recommended for production use, as it can lead to security issues" (`@better-auth/api-key` types). A mocked session also lets a key call every better-auth endpoint that accepts a session (change password, create more keys…), which is more power than an integration key needs.
+
+### 2.1-b: API key rate limit set to 120 requests/minute
+
+- **Cause:** the plugin's default is **10 requests per key per day** (`rateLimitMax 10`, window 86 400 000 ms), which would break any integration that polls order status. 120/min per key is generous for polling and still bounds abuse. The generated schema defaults changed accordingly.
+
+### 2.1-c: `rate_limit` table added (migration `0001`)
+
+- `rateLimit.storage: 'database'` (design §4.4) needs better-auth's `rate_limit` table; the auth schema was regenerated with the CLI and the migration generated with drizzle-kit.
+
+### 2.1-d: CLI-only auth instance moved to `src/core/auth-cli.ts` (closes 1.1-g)
+
+- `src/core/auth.ts` no longer builds an instance at import time. `auth-cli.ts` passes placeholder env with Google enabled so the generated schema covers every table.
+
+### 2.1-e: env validated with zod in `src/core/env.ts`; `APP_HOST` removed
+
+- `parseEnv()` runs per Worker invocation and once at Bun startup (design §4.5: not at module load).
+- Empty values (`FOO=` from `.env.example`) count as unset; `ENCRYPTION_KEY` must decode to 32 bytes; one Google credential without the other fails (react-starter-kit does the same check).
+- `APP_HOST` is now derived from `BETTER_AUTH_URL`: both describe the app's public origin, and two variables could drift (e.g. the SSRF self-host check using a stale host).
+- **Affects the user's setup:** `.env` and the Worker need `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`; `APP_HOST` is no longer read.
+
+### 2.1-f: signup switch also covers Google
+
+- `ALLOW_SIGNUP=false` sets `emailAndPassword.disableSignUp` **and** the Google provider's `disableSignUp`; otherwise a new Google account would still create a user.
+- Known limit: with `ALLOW_SIGNUP=false` from the start nobody can create the first (admin) account. Self-host docs (2.10) say: sign up first, then set it to `false`.
+
+### 2.1-g: `RESEND_API_KEY` (email verification / password reset) deferred
+
+- Design §4.4 enables them when `RESEND_API_KEY` is set. Not in the plan's task list, and untestable without a sending domain. Admins reset passwords through the admin plugin meanwhile.

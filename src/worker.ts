@@ -1,36 +1,36 @@
 import { createApp } from './api/app';
+import { createAuth } from './core/auth';
 import { createDb } from './core/db/client';
 import type { Deps, Trigger } from './core/deps';
 import { dohResolveTxt } from './core/dkim';
+import { appHost, parseEnv } from './core/env';
 import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
 
 type QueueMessage = { id: string; trigger: Trigger };
-type Env = {
-  HYPERDRIVE: Hyperdrive;
-  QUEUE: Queue<QueueMessage>;
-  ENCRYPTION_KEY: string;
-  APP_HOST: string;
-  ALLOW_PRIVATE_WEBHOOKS?: string;
-};
+type Bindings = { HYPERDRIVE: Hyperdrive; QUEUE: Queue<QueueMessage> } & Record<string, unknown>;
+type WaitUntil = (promise: Promise<unknown>) => void;
 
 // A new postgres.js client per invocation is what Hyperdrive recommends; it cleans the
 // connection up when the invocation ends, so there is nothing to close.
-function makeDeps(env: Env): Deps {
+function makeDeps(bindings: Bindings, waitUntil?: WaitUntil): Deps {
+  const env = parseEnv(bindings);
+  const { db } = createDb(bindings.HYPERDRIVE.connectionString);
   return {
-    db: createDb(env.HYPERDRIVE.connectionString).db,
+    db,
+    auth: createAuth(db, env, waitUntil),
     resolveTxt: dohResolveTxt,
     encryptionKey: env.ENCRYPTION_KEY,
     fetch: fetch.bind(globalThis),
-    allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS === 'true',
-    appHost: env.APP_HOST,
+    allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS,
+    appHost: appHost(env),
     scheduleDelivery: async (id, delaySeconds, trigger = 'scheduled') => {
-      await env.QUEUE.send({ id, trigger }, { delaySeconds: Math.ceil(delaySeconds) });
+      await bindings.QUEUE.send({ id, trigger }, { delaySeconds: Math.ceil(delaySeconds) });
     },
   };
 }
 
-const app = createApp((c) => makeDeps(c.env));
+const app = createApp((c) => makeDeps(c.env, (p) => c.executionCtx.waitUntil(p)));
 
 export default {
   fetch: app.fetch,
@@ -49,4 +49,4 @@ export default {
   async scheduled(_event, env) {
     await runMaintenance(makeDeps(env));
   },
-} satisfies ExportedHandler<Env, QueueMessage>;
+} satisfies ExportedHandler<Bindings, QueueMessage>;

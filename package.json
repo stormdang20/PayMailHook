@@ -14,12 +14,14 @@
   },
   "dependencies": {
     "@better-auth/api-key": "^1.7.5",
+    "@hono/zod-validator": "^0.9.1",
     "better-auth": "^1.7.5",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.9",
     "mailauth": "^5.0.3",
     "postal-mime": "^3.0.0",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
