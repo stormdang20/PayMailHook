@@ -644,3 +644,16 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - Verification snippets use the official Standard Webhooks libraries for Node (`standardwebhooks`), PHP (`standard-webhooks/standard-webhooks`) and Python (`standardwebhooks`), with header names lower-cased before `verify()`; the Node snippet reads the raw body (`express.raw`) because the signature covers the exact bytes. They follow design §3.6 (dedupe by `webhook-id` and still answer 2xx, match `orderId` and `amount`, answer within 10 s).
 - The PHP/Python snippets were not executed here (no PHP/Python receiver in this repo); the Node flow is covered by tests that verify real signatures with the `standardwebhooks` package.
 - Privacy page lists exactly what the schema stores and the retention the cron enforces (webhook logs 30 days, failed raw emails 7 days, encrypted).
+
+## Task 3.6: Playwright E2E
+
+### 3.6-a: a test-only server entry on PGlite
+
+- **Cause:** the E2E test must post a DKIM-signed bank email. A real signature needs the private key of `cake.vn`; the unit tests sign with a key generated at test time and resolve it with `testResolver`. The server process must therefore use that same resolver and key, which the production entries rightly don't allow.
+- **Done:** `e2e/server.ts` builds the real `createApp()` with in-memory PGlite (migrations applied), `testResolver`, real `deliver()` on timers, the built SPA, plus two test routes: `GET /__e2e/signed-email?to=` (a CAKE email signed with the server's test key) and `POST /__e2e/hook` (the webhook receiver). No Postgres is needed locally or in CI, and nothing test-only ships in `src/`.
+- **Flow tested in a real browser:** sign up → add a Gmail with a webhook URL → read the token from the `Code.gs` shown in the dialog → post the signed email to `/api/ingest` (what Apps Script does) → the transaction appears on `/transactions` (`+149.000`, order `123456`) → the delivery reaches `Thành công` on `/deliveries`.
+- Local runs use the system Chrome (`channel: 'chrome'`); CI installs Playwright's Chromium (`bunx playwright install --with-deps chromium`) and runs `bun run e2e` after the other checks.
+
+### 3.6-b: found by the E2E run: rate limiting had no client IP (fixed in the next commit)
+
+- better-auth logged "Rate limiting could not determine a client IP and is falling back to a single shared per-path bucket". With the sign-in rule (5/min), five failed sign-ins by anyone would lock out every user. See 3.6-c.

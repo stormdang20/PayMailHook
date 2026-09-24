@@ -13,7 +13,8 @@
     "db:migrate": "drizzle-kit migrate",
     "build": "vite build",
     "build:worker": "vite build && bun node_modules/wrangler/bin/wrangler.js deploy --dry-run --outdir dist/worker",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "vite build && wrangler deploy",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@better-auth/api-key": "^1.7.5",
@@ -46,6 +47,7 @@
     "@biomejs/biome": "^2.5.14",
     "@cloudflare/workers-types": "^5.20260924.1",
     "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.4.2",
     "@types/qrcode": "^1.5.6",

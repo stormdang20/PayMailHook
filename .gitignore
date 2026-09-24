@@ -14,3 +14,7 @@ mail-template/
 # Build output
 node_modules/
 dist/
+
+# Playwright
+test-results/
+playwright-report/
