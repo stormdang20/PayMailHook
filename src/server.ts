@@ -1,4 +1,5 @@
 import { inArray } from 'drizzle-orm';
+import { serveStatic } from 'hono/bun';
 import { createApp } from './api/app';
 import { createAuth } from './core/auth';
 import { createDb } from './core/db/client';
@@ -37,4 +38,10 @@ const open = await db
 for (const d of open) await deps.scheduleDelivery(d.id, Math.max(0, ((d.at?.getTime() ?? 0) - Date.now()) / 1000));
 setInterval(() => runMaintenance(deps).catch(console.error), 60 * 60 * 1000);
 
-export default { port: Number(process.env.PORT ?? 3000), fetch: createApp(() => deps).fetch };
+// Self-host serves the SPA too (dist/client from `bun run build`); unknown /api paths stay 404.
+const app = createApp(() => deps);
+const spa = serveStatic({ path: './dist/client/index.html' });
+app.use('*', serveStatic({ root: './dist/client' }));
+app.get('*', (c, next) => (c.req.path.startsWith('/api/') ? c.notFound() : spa(c, next)));
+
+export default { port: Number(process.env.PORT ?? 3000), fetch: app.fetch };

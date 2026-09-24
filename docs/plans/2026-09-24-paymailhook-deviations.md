@@ -493,3 +493,30 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 2.4-c: delivery list joins the transaction
 
 - List items carry `orderId` and `amount`, so the webhook log page (2.6) needs no second request per row.
+
+## Task 2.5: SPA scaffold
+
+### 2.5-a: no `@cloudflare/vite-plugin`; Vite builds `web/` into `dist/client`
+
+- **Reference:** saasmail uses `@cloudflare/vite-plugin`, which runs `workerd` for dev.
+- **Cause:** `workerd` cannot run on the dev machine (glibc 2.31, D14).
+- **Done:** plain Vite with `root: 'web'`, `outDir: dist/client`. Dev runs `bun run dev` (API) and `bun run dev:web` (Vite, proxies `/api` to `API_URL`, default `http://localhost:3000`), so cookies stay same-origin. The Worker serves the build through `assets` with `not_found_handling: single-page-application` and `run_worker_first: ["/api/*"]`; the Bun server serves the same build with `hono/bun` `serveStatic` and an `index.html` fallback that never swallows `/api/*`.
+- **Checked:** `/`, `/transactions`, `/deliveries` return the SPA; `/api/me` and unknown `/api/*` return JSON from the API.
+
+### 2.5-b: `createApp()` chains its routes
+
+- **Cause:** `hc<AppType>` only sees routes registered by chaining (`app.get(...).route(...)`); separate `app.get()` statements leave `AppType` with no routes.
+
+### 2.5-c: shadcn `radix-nova` preset, `cn` package
+
+- `shadcn init -t vite -b radix -p nova` (the CLI's default preset). Current shadcn replaces `clsx` + `tailwind-merge` with the `cn` package from `github.com/shadcn-ui/cn` (checked its `package.json` before keeping it).
+- Biome: CSS parser option `tailwindDirectives` enabled for `@theme`/`@custom-variant`.
+
+### 2.5-d: `hono/client` `parseResponse` instead of a hand-written unwrap
+
+- It returns the typed JSON body and throws `DetailedError` for non-2xx responses, which is what TanStack Query needs.
+
+### 2.5-e: build scripts
+
+- `bun run build` = `vite build`. `build:worker` now runs `vite build` first (wrangler needs the assets directory) and writes the Worker bundle to `dist/worker` so it can't clash with `dist/client`.
+- **Result:** SPA JS 133 KiB gzip; Worker total 1057 KiB gzip.

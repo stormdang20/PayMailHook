@@ -6,7 +6,11 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["bun", "@cloudflare/workers-types"]
+    "types": ["bun", "@cloudflare/workers-types", "vite/client"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./web/*"]
+    }
   },
   "exclude": ["node_modules", "dist", "repo-ref"]
 }

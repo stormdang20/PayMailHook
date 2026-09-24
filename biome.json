@@ -4,6 +4,7 @@
   "files": { "includes": ["**", "!**/migrations", "!**/dist", "!src/core/db/auth-schema.ts", "!test/fixtures"] },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "css": { "parser": { "tailwindDirectives": true } },
   "javascript": { "formatter": { "quoteStyle": "single" } },
   "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } }
 }
