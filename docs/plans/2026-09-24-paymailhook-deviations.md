@@ -664,3 +664,26 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - **Done:** `createAuth(…, ipHeader)`. The Worker passes `cf-connecting-ip` (set by Cloudflare, clients cannot forge it). The Bun server copies the socket address (`server.requestIP`) into `x-client-ip`, **overwriting** any value the client sent, and passes that header name.
 - **Tests:** unit test: 6 failed sign-ins from one IP → 429 for it, another IP still allowed. Manual test on the Bun server: rotating a forged `x-client-ip` value does not escape the limit (401 ×5, then 429).
 - **Known limit (`ponytail:` in `server.ts`):** a self-host behind a reverse proxy sees the proxy's address, i.e. one shared bucket again. Supporting `X-Forwarded-For` safely needs the proxy's address (better-auth `trustedProxies`); add an env option if someone needs it.
+
+---
+
+# P4: Extensions
+
+## Task 4.1: Web Push
+
+### 4.1-a: WebCrypto implementation ported from saasmail, no `web-push` package
+
+- `web-push` (npm) relies on Node's `crypto`/`https` modules; saasmail (the plan's reference) implements RFC 8291 + RFC 8292 with WebCrypto only, which runs on both Workers and Bun. `src/core/push.ts` is a trimmed port (native base64url, one HKDF helper since every output is ≤ 32 bytes).
+- Tests: the payload decrypts with a browser-side implementation of RFC 8291 (receiver ECDH key + auth secret); the VAPID JWT verifies as ES256 against the public key.
+
+### 4.1-b: behaviour decisions
+
+- **When:** after every **stored incoming** transaction (not only ones with an order code), to every browser the owner subscribed. Title `+149.000 đ`, body `Đơn <order>: <description>`, click opens `/transactions`.
+- **Never breaks ingest:** each send is wrapped; failures are logged. A `404`/`410` from the push service deletes that subscription (the browser unsubscribed).
+- **SSRF:** the endpoint URL comes from the browser, so `POST /api/push/subscriptions` validates it with the strict webhook rules (https, no IP/localhost/internal names) regardless of `ALLOW_PRIVATE_WEBHOOKS`. Tested with `https://10.0.0.5/x`.
+- **Config:** optional `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` (both or neither; `bun scripts/generate-vapid.ts` prints a pair). The VAPID subject is `BETTER_AUTH_URL` (RFC 8292 accepts an https URL), so no third variable. `GET /api/config` returns `vapidPublicKey`; the "Bật thông báo" button only appears when it is set and the browser supports Push.
+- Table `push_subscriptions` (endpoint unique, re-subscribing the same browser updates its keys), migration `0003`.
+
+### 4.1-c: not verified end to end
+
+- A real notification needs a real browser profile and Google's/Mozilla's push service; listed in the user checklist. The E2E run still passes with the service worker in the build.

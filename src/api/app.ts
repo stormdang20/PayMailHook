@@ -9,6 +9,7 @@ import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
 import { deliveryRoutes } from './deliveries';
 import { emailConfigRoutes } from './email-configs';
+import { pushRoutes } from './push';
 import { qrRoutes } from './qr';
 import { shareRoutes } from './share';
 import { transactionRoutes } from './transactions';
@@ -46,6 +47,7 @@ export function createApp(makeDeps: (c: Context) => Deps) {
         c.json({
           socialProviders: Object.keys(c.var.deps.auth.options.socialProviders ?? {}),
           imap: c.var.deps.imapEnabled,
+          vapidPublicKey: c.var.deps.vapid?.publicKey ?? null,
         }),
       )
       .get('/api/me', async (c) => {
@@ -60,6 +62,7 @@ export function createApp(makeDeps: (c: Context) => Deps) {
       .route('/api/webhook-deliveries', deliveryRoutes)
       .route('/api/qr', qrRoutes)
       .route('/api/share', shareRoutes)
+      .route('/api/push', pushRoutes)
       .post('/api/ingest', async (c) => {
         const { deps } = c.var;
         const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];

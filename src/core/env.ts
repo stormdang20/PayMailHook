@@ -25,14 +25,26 @@ const schema = z
     GOOGLE_CLIENT_SECRET: optional,
     ALLOW_SIGNUP: flag(true),
     ALLOW_PRIVATE_WEBHOOKS: flag(false),
+    VAPID_PUBLIC_KEY: optional,
+    VAPID_PRIVATE_KEY: optional,
   })
   // Like react-starter-kit: one Google credential without the other is a broken deploy, not "Google off".
   .refine(
     (e) => !e.GOOGLE_CLIENT_ID === !e.GOOGLE_CLIENT_SECRET,
     'set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or neither',
+  )
+  .refine(
+    (e) => !e.VAPID_PUBLIC_KEY === !e.VAPID_PRIVATE_KEY,
+    'set both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, or neither',
   );
 
 export type Env = z.infer<typeof schema>;
 
 /** Validated on first use, not at module load: Workers only has `env` inside a handler (design §4.5). */
 export const parseEnv = (raw: Record<string, unknown>): Env => schema.parse(raw);
+
+/** Web Push config; the VAPID subject is the app's own URL (RFC 8292 accepts an https URL). */
+export const vapidFrom = (env: Env) =>
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
+    ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.BETTER_AUTH_URL }
+    : undefined;

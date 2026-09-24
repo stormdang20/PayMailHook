@@ -22,6 +22,13 @@
       "when": 1790242789576,
       "tag": "0002_daffy_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790243417022,
+      "tag": "0003_early_sage",
+      "breakpoints": true
     }
   ]
 }

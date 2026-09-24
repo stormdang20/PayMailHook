@@ -11,4 +11,6 @@ export const auth = createAuth({} as Database, {
   GOOGLE_CLIENT_SECRET: 'cli',
   ALLOW_SIGNUP: true,
   ALLOW_PRIVATE_WEBHOOKS: false,
+  VAPID_PUBLIC_KEY: undefined,
+  VAPID_PRIVATE_KEY: undefined,
 });

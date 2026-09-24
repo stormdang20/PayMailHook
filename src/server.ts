@@ -7,7 +7,7 @@ import { migrateDb } from './core/db/migrate';
 import { webhookDeliveries } from './core/db/schema';
 import type { Deps } from './core/deps';
 import { dohResolveTxt } from './core/dkim';
-import { parseEnv } from './core/env';
+import { parseEnv, vapidFrom } from './core/env';
 import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
 import { superviseImap } from './imap';
@@ -28,6 +28,7 @@ const deps: Deps = {
   fetch,
   allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS,
   imapEnabled: true,
+  vapid: vapidFrom(env),
   appUrl: env.BETTER_AUTH_URL,
   // ponytail: in-process timers; state lives in the DB and the startup scan below re-arms them.
   scheduleDelivery: async (id, delaySeconds, trigger) => {

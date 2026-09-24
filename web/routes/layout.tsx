@@ -1,4 +1,5 @@
 import { Navigate, NavLink, Outlet } from 'react-router';
+import { PushToggle } from '@/components/push-toggle';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ export function Layout() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <PushToggle />
             <span className="text-muted-foreground">{session.user.email}</span>
             <Button variant="outline" size="sm" onClick={() => authClient.signOut()}>
               Đăng xuất

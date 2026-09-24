@@ -3,7 +3,7 @@ import { createAuth } from './core/auth';
 import { createDb } from './core/db/client';
 import type { Deps, Trigger } from './core/deps';
 import { dohResolveTxt } from './core/dkim';
-import { parseEnv } from './core/env';
+import { parseEnv, vapidFrom } from './core/env';
 import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
 
@@ -24,6 +24,7 @@ function makeDeps(bindings: Bindings, waitUntil?: WaitUntil): Deps {
     fetch: fetch.bind(globalThis),
     allowPrivateWebhooks: env.ALLOW_PRIVATE_WEBHOOKS,
     imapEnabled: false,
+    vapid: vapidFrom(env),
     appUrl: env.BETTER_AUTH_URL,
     scheduleDelivery: async (id, delaySeconds, trigger = 'scheduled') => {
       await bindings.QUEUE.send({ id, trigger }, { delaySeconds: Math.ceil(delaySeconds) });

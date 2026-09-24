@@ -6,6 +6,7 @@ import { encrypt } from './crypto';
 import { type EmailConfig, emailConfigs, inboundFailures, transactions, webhookDeliveries } from './db/schema';
 import type { Deps } from './deps';
 import { verifyBankDkim } from './dkim';
+import { notifyIncoming } from './push';
 import { htmlToLines, normalizeEmail } from './text';
 import { buildPayload } from './webhook';
 
@@ -43,8 +44,9 @@ function parseBody(parse: Bank['parse'], html: string) {
 const isUniqueViolation = (e: unknown) =>
   e instanceof DrizzleQueryError && (e.cause as { code?: string } | undefined)?.code === '23505';
 
-async function store(deps: Deps, config: EmailConfig, bank: Bank, messageId: string, txn: ParsedTxn) {
-  const orderId = txn.direction === 'in' ? extractOrderId(txn.description, config.orderPrefix) : null;
+type Stored = { bank: Bank; messageId: string; txn: ParsedTxn; orderId: string | null };
+
+async function store(deps: Deps, config: EmailConfig, { bank, messageId, txn, orderId }: Stored) {
   return deps.db.transaction(async (tx): Promise<IngestResult> => {
     // First, so a Gmail already claimed by another config (partial unique index) rolls everything back.
     await tx
@@ -101,8 +103,11 @@ export async function ingestRawEmail(
   const txn = parseBody(bank.parse, email.html ?? '');
   if (!txn) return reject(deps, config, raw, 'parse_failed', messageId);
   try {
-    const result = await store(deps, config, bank, messageId, txn);
-    if (result.status === 'stored' && result.deliveryId) await deps.scheduleDelivery(result.deliveryId, 0);
+    const orderId = txn.direction === 'in' ? extractOrderId(txn.description, config.orderPrefix) : null;
+    const result = await store(deps, config, { bank, messageId, txn, orderId });
+    if (result.status !== 'stored') return result;
+    if (result.deliveryId) await deps.scheduleDelivery(result.deliveryId, 0);
+    await notifyIncoming(deps, config.userId, txn, orderId);
     return result;
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;
