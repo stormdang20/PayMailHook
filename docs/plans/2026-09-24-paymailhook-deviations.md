@@ -636,3 +636,11 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 3.4-c: manual check
 
 - Public pages `/share/t/:token` and `/share/c/:token` rendered in headless Chrome without a session; an unknown token shows "link does not exist or was revoked".
+
+## Task 3.5: Guide and Privacy pages
+
+- Both pages are **public** (`/guide`, `/privacy`, linked from the sign-in page and the dashboard nav) so developers can read the integration contract before creating an account.
+- The guide's example payload is a constant in `web/lib/webhook-sample.ts` rather than an import of `buildPayload()` (which would pull server code into the browser bundle); `test/guide-sample.test.ts` fails if the two ever differ.
+- Verification snippets use the official Standard Webhooks libraries for Node (`standardwebhooks`), PHP (`standard-webhooks/standard-webhooks`) and Python (`standardwebhooks`), with header names lower-cased before `verify()`; the Node snippet reads the raw body (`express.raw`) because the signature covers the exact bytes. They follow design §3.6 (dedupe by `webhook-id` and still answer 2xx, match `orderId` and `amount`, answer within 10 s).
+- The PHP/Python snippets were not executed here (no PHP/Python receiver in this repo); the Node flow is covered by tests that verify real signatures with the `standardwebhooks` package.
+- Privacy page lists exactly what the schema stores and the retention the cron enforces (webhook logs 30 days, failed raw emails 7 days, encrypted).

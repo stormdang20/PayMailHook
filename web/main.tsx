@@ -7,7 +7,9 @@ import { Toaster } from './components/ui/sonner';
 import { AuthPage } from './routes/auth-page';
 import { ConfigsPage } from './routes/configs';
 import { DeliveriesPage } from './routes/deliveries';
+import { GuidePage } from './routes/guide';
 import { Layout } from './routes/layout';
+import { PrivacyPage } from './routes/privacy';
 import { QrPage } from './routes/qr';
 import { SharedListPage, SharedTransactionPage } from './routes/share';
 import { TransactionsPage } from './routes/transactions';
@@ -17,6 +19,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 const router = createBrowserRouter([
   { path: '/sign-in', element: <AuthPage mode="sign-in" /> },
   { path: '/sign-up', element: <AuthPage mode="sign-up" /> },
+  { path: '/guide', Component: GuidePage },
+  { path: '/privacy', Component: PrivacyPage },
   { path: '/share/t/:token', Component: SharedTransactionPage },
   { path: '/share/c/:token', Component: SharedListPage },
   {

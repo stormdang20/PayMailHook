@@ -86,6 +86,14 @@ export function AuthPage({ mode }: { mode: Mode }) {
           <Link to={text.to} className="block text-center text-muted-foreground text-sm hover:underline">
             {text.switch}
           </Link>
+          <div className="flex justify-center gap-4 text-muted-foreground text-xs">
+            <Link to="/guide" className="hover:underline">
+              Hướng dẫn tích hợp
+            </Link>
+            <Link to="/privacy" className="hover:underline">
+              Quyền riêng tư
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
