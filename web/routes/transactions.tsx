@@ -22,6 +22,9 @@ export function TransactionsPage() {
         }),
       ),
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    // Near-realtime while the tab is visible; TanStack pauses interval refetches for hidden tabs,
+    // so an idle dashboard lets Neon scale to zero.
+    refetchInterval: 5000,
   });
   const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
 

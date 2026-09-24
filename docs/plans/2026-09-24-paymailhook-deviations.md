@@ -596,3 +596,12 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - The guide recommends **IMAP for Self-host** (outbound connection, works on a LAN box) and explains that Apps Script needs a publicly reachable `/api/ingest`.
 - Neon migrations are applied with `drizzle-kit migrate` against the direct connection string before creating Hyperdrive; the Worker itself never migrates (it has no filesystem).
 - Not yet verified by following it on a real Cloudflare account (part of the user's Task 1.13 spike).
+
+---
+
+# P3: Complete dashboard
+
+## Task 3.1: Realtime transactions
+
+- As planned: `refetchInterval: 5000` on the transactions query. No extra visibility code: `@tanstack/query-core` only runs interval refetches when `refetchIntervalInBackground` is set or `focusManager.isFocused()` (document not hidden), checked in `queryObserver.ts`. New rows appear within ~5 s plus request time.
+- Kept to the transactions page, as the plan says; the webhook log refreshes on open and after a manual retry.
