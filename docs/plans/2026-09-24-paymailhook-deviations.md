@@ -477,3 +477,19 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 2.3-d: test helpers `test/http.ts`
 
 - `signUp`, `call` and `json` shared by API tests. `json()` returns `any` (with a Biome ignore comment) because `Response.json()` resolves to a conflicting type when Bun and Workers typings are both loaded (see 1.0-c).
+
+## Task 2.4: Transaction and delivery API
+
+### 2.4-a: keyset cursor keeps Postgres' timestamp text
+
+- **Cause:** `created_at` (`defaultNow()`) has microsecond precision; a JS `Date` has milliseconds. A cursor built from `Date` would round the boundary row and either repeat or skip rows created within the same millisecond.
+- **Done:** each page selects `ts::text` as a hidden `cursorTs`, the cursor is base64url JSON `{ ts, id }`, and the filter is the row comparison `(ts, id) < (cursor.ts::timestamptz, cursor.id::uuid)` with `ORDER BY ts DESC, id DESC`, which matches the `(user_id, occurred_at desc)` index. A malformed cursor is a 400 (validated), not a Postgres cast error.
+- **Test:** 8 rows (5 sharing one timestamp), page size 3: every row exactly once, newest first.
+
+### 2.4-b: manual retry answers 409 for scheduled deliveries
+
+- Follows 1.8-a: `POST /api/webhook-deliveries/:id/retry` returns `202` for `success`/`failed` and `409 { code: 'not_finished' }` for `pending`/`retrying` instead of a silent no-op.
+
+### 2.4-c: delivery list joins the transaction
+
+- List items carry `orderId` and `amount`, so the webhook log page (2.6) needs no second request per row.

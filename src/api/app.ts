@@ -7,7 +7,9 @@ import { emailConfigs, user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
+import { deliveryRoutes } from './deliveries';
 import { emailConfigRoutes } from './email-configs';
+import { transactionRoutes } from './transactions';
 
 export type SessionUser = { id: string; role: string | null };
 export type AppEnv = { Variables: { deps: Deps; user: SessionUser } };
@@ -43,6 +45,8 @@ export function createApp(makeDeps: (c: Context) => Deps) {
   });
 
   app.route('/api/email-configs', emailConfigRoutes);
+  app.route('/api/transactions', transactionRoutes);
+  app.route('/api/webhook-deliveries', deliveryRoutes);
 
   app.post('/api/ingest', async (c) => {
     const { deps } = c.var;
