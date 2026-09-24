@@ -249,3 +249,34 @@ All 6 real sample emails in `mail-template/` verify with live DNS (the real-samp
 
 - **Plan:** `makeDeps` defined inside `test/ingest.test.ts`.
 - **Cause:** Task 1.8 needs it too; importing a `*.test.ts` file from another test file makes `bun test` register its tests a second time.
+
+---
+
+## Task 1.8: `deliver()` and periodic maintenance
+
+### 1.8-a: manual trigger claims only finished deliveries (plan over design)
+
+- **Design §3.2:** "manual: also allows failed/success", i.e. manual may claim any of the four statuses.
+- **Plan / Done:** manual claims only `success` and `failed`; a manual call on a `pending`/`retrying` delivery is a no-op (tested).
+- **Cause:** on a failed manual attempt the plan sets `next_attempt_at = null` and keeps the status. For a `retrying` delivery that would leave it `retrying` with no due time: the queued message fails its claim (`null <= now()` is not true) and the hourly cron skips it (`null < now() - 2 min` is not true either), so it would be stuck forever. Restricting manual to terminal statuses avoids that and also avoids racing an in-flight scheduled send.
+- **Affects later work:** P2's `POST /api/webhook-deliveries/:id/retry` should answer something like `409 not_finished` (or just 202 and no-op) for `pending`/`retrying`.
+
+### 1.8-b: retry time computed by the database clock
+
+- **Plan:** `nextAttemptAt: now + delay` (JS clock).
+- **Done:** `sql\`now() + make_interval(secs => ${delay})\``.
+- **Cause:** the claim compares `next_attempt_at` with the DB's `now()`. Mixing the Worker/Bun clock with the DB clock adds skew to the 5-second tolerance; using `now()` on both sides removes it.
+
+### 1.8-c: tests in `test/deliver.test.ts` instead of appending to `test/webhook.test.ts`
+
+- **Cause:** `webhook.test.ts` is pure (no DB) and runs in milliseconds; delivery tests each boot PGlite. Keeping them apart keeps the fast file fast and each file focused.
+- Two extra cases: manual retry on a scheduled delivery is a no-op (1.8-a), and a `301` carrying `Location: http://10.0.0.1` is not followed.
+
+### 1.8-d: no injected `now`
+
+- **Plan (design §5.1):** "`fetch` and `now` injected".
+- **Done:** only `fetch` is injected. All scheduling times come from the DB's `now()` (see 1.8-b), and tests move `next_attempt_at`/`created_at` with SQL instead. A `now` dependency would have no reader.
+
+### 1.8-e: `transition()` uses Drizzle's `PgUpdateSetSource` type
+
+- Lets the helper accept `sql\`…\`` values without a loose `Record<string, unknown>`.

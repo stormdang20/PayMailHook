@@ -1,4 +1,9 @@
+import { and, eq, inArray, lte, sql } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import type { ParsedTxn } from './banks';
+import { decryptText } from './crypto';
+import { emailConfigs, transactions, webhookAttempts, webhookDeliveries } from './db/schema';
+import type { Deps, Trigger } from './deps';
 
 export const newWebhookSecret = () => `whsec_${crypto.getRandomValues(new Uint8Array(24)).toBase64()}`;
 
@@ -67,4 +72,101 @@ export function validateWebhookUrl(raw: string, policy: UrlPolicy): string | nul
   if (blocked || BLOCKED_SUFFIXES.some((s) => host.endsWith(s))) return 'host_not_allowed';
   // ponytail: no DNS check for names resolving to private IPs; add a DoH A/AAAA check if abuse appears.
   return null;
+}
+
+export const RETRY_SCHEDULE = [10, 10, 20, 30, 50, 3600, 7200, 14400, 28800];
+
+type Delivery = typeof webhookDeliveries.$inferSelect;
+type Outcome = { statusCode: number | null; responseBody: string | null; error: string | null };
+
+/** Conditional UPDATE as a lease: only one caller wins, a crashed sender is retried after 60s (design §3.2). */
+async function claim(deps: Deps, id: string, trigger: Trigger) {
+  // Manual only re-sends finished deliveries, so it never races or cancels a scheduled retry.
+  const due =
+    trigger === 'manual'
+      ? inArray(webhookDeliveries.status, ['success', 'failed'])
+      : and(
+          inArray(webhookDeliveries.status, ['pending', 'retrying']),
+          lte(webhookDeliveries.nextAttemptAt, sql`now() + interval '5 seconds'`),
+        );
+  const [row] = await deps.db
+    .update(webhookDeliveries)
+    .set({ nextAttemptAt: sql`now() + interval '60 seconds'` })
+    .where(and(eq(webhookDeliveries.id, id), due))
+    .returning();
+  return row;
+}
+
+async function loadTarget(deps: Deps, transactionId: string) {
+  const [target] = await deps.db
+    .select({ url: emailConfigs.webhookUrl, secretEnc: emailConfigs.webhookSecretEnc })
+    .from(transactions)
+    .innerJoin(emailConfigs, eq(transactions.emailConfigId, emailConfigs.id))
+    .where(eq(transactions.id, transactionId));
+  return target;
+}
+
+async function send(deps: Deps, delivery: Delivery, url: string, secretEnc: string): Promise<Outcome> {
+  const body = JSON.stringify(delivery.payload);
+  const ts = Math.floor(Date.now() / 1000);
+  const signature = await signWebhook(await decryptText(deps.encryptionKey, secretEnc), delivery.id, ts, body);
+  try {
+    const res = await deps.fetch(url, {
+      method: 'POST',
+      body,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        'content-type': 'application/json',
+        'user-agent': 'PayMailHook/1.0',
+        'webhook-id': delivery.id,
+        'webhook-timestamp': String(ts),
+        'webhook-signature': signature,
+      },
+    });
+    return { statusCode: res.status, responseBody: (await res.text()).slice(0, 1024), error: null };
+  } catch (e) {
+    if (!(e instanceof Error)) throw e;
+    return { statusCode: null, responseBody: null, error: e.name === 'TimeoutError' ? 'timeout' : e.message };
+  }
+}
+
+async function transition(deps: Deps, delivery: Delivery, trigger: Trigger, statusCode: number | null) {
+  const update = (set: PgUpdateSetSource<typeof webhookDeliveries>) =>
+    deps.db
+      .update(webhookDeliveries)
+      .set({ attemptCount: delivery.attemptCount + 1, lastStatusCode: statusCode, ...set })
+      .where(eq(webhookDeliveries.id, delivery.id));
+  if (statusCode !== null && statusCode >= 200 && statusCode < 300) {
+    return update({ status: 'success', nextAttemptAt: null });
+  }
+  if (trigger === 'manual') return update({ nextAttemptAt: null });
+  const delay = RETRY_SCHEDULE[delivery.attemptCount];
+  if (delay === undefined) return update({ status: 'failed', nextAttemptAt: null });
+  await update({ status: 'retrying', nextAttemptAt: sql`now() + make_interval(secs => ${delay})` });
+  await deps.scheduleDelivery(delivery.id, delay);
+}
+
+export async function deliver(deps: Deps, id: string, trigger: Trigger = 'scheduled') {
+  const delivery = await claim(deps, id, trigger);
+  if (!delivery) return;
+  const target = await loadTarget(deps, delivery.transactionId);
+  const url = target?.url;
+  const secretEnc = target?.secretEnc;
+  const policy = { allowPrivate: deps.allowPrivateWebhooks, appHost: deps.appHost };
+  const blocked = url && secretEnc ? validateWebhookUrl(url, policy) : 'webhook_not_configured';
+  const started = Date.now();
+  const outcome: Outcome =
+    url && secretEnc && !blocked
+      ? await send(deps, delivery, url, secretEnc)
+      : { statusCode: null, responseBody: null, error: blocked };
+  await deps.db.insert(webhookAttempts).values({
+    deliveryId: delivery.id,
+    attemptNumber: delivery.attemptCount + 1,
+    trigger,
+    url: url ?? '',
+    ...outcome,
+    durationMs: Date.now() - started,
+  });
+  await transition(deps, delivery, trigger, outcome.statusCode);
 }
