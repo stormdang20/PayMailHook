@@ -8,3 +8,9 @@ mail-template/
 .env
 .env.*
 !.env.example
+.cursor
+.codegraph
+
+# Build output
+node_modules/
+dist/

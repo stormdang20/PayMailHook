@@ -1,0 +1,33 @@
+{
+  "name": "paymailhook",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "check": "biome check . && tsc --noEmit && bun test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "build:worker": "bun node_modules/wrangler/bin/wrangler.js deploy --dry-run --outdir dist"
+  },
+  "dependencies": {
+    "better-auth": "^1.7.5",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.9",
+    "mailauth": "^5.0.3",
+    "postal-mime": "^3.0.0",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@cloudflare/workers-types": "^5.20260924.1",
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/bun": "^1.4.2",
+    "drizzle-kit": "^0.31.11",
+    "standardwebhooks": "^1.1.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.137.0"
+  }
+}
