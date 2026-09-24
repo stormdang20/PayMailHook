@@ -110,3 +110,33 @@ Every place where the implementation differs from [the plan](2026-09-24-paymailh
 - **Plan:** tests only round-trip and fresh IV.
 - **Done:** one more test flips a byte and expects `decrypt` to reject.
 - **Cause:** authenticity (the GCM tag) is the reason AES-GCM was chosen for webhook secrets, App Passwords and failed raw emails; round-trip tests alone would still pass with an unauthenticated mode.
+
+---
+
+## Task 1.3: Anonymized fixtures
+
+### 1.3-a: files sorted before numbering
+
+- **Plan:** `readdir(...)` output used as-is to name `1.html`, `2.html`, …
+- **Done:** `.sort()` before numbering.
+- **Cause:** `readdir` returns directory order, which is filesystem-dependent (ext4 uses hash order) and not guaranteed stable. Task 1.4 tests hard-code `cake/2.html` as the incoming sample and `timo/2.html` as the 2.570.000 increase.
+- **Result:** after sorting, `cake/2.html` is the `+149.000` sample and `timo/2.html` is the `+2.570.000` sample, which matches the plan's Task 1.4 tests.
+
+### 1.3-b: NFC normalization and a built-in leak check
+
+- **Plan:** plain `replaceAll`, then a manual `rg -f <(jq -r 'keys[]' …)` check.
+- **Done:** HTML and PII keys are normalized to NFC before replacing; the script then throws if any PII value is still present, compared case-insensitively in both NFC and NFD form. It never prints the leaked value, only its length.
+- **Cause:** Vietnamese names can be stored precomposed (NFC) or decomposed (NFD). A mismatch makes `replaceAll` miss the name, and the byte-exact `rg` check misses it too, so the leak would be committed silently. Fixtures go into a public repo, so this is a trust boundary.
+- **Why this way:** about 8 lines, and the script cannot write a leaking fixture. The plan's `rg` check was still run and found nothing.
+
+### 1.3-c: CAKE transaction IDs added to `mail-template/pii.json`
+
+- **Plan:** `pii.json` (17 entries) was considered complete.
+- **Done:** added 2 entries, so it has 19: the real CAKE `Mã giao dịch` values map to `500000001` (incoming, `cake/2.html`, same value as the payload example in design §3.1) and `500000002` (outgoing).
+- **Cause:** the manual review (Step 4) found real CAKE transaction IDs in the visible text. `pii.json` already covered Timo reference codes but not CAKE's.
+- **Kept on purpose:** amounts, dates and times (Task 1.4 tests assert `149000`, `2570000`, `18:28:07`); the CAKE hotline and `chat@cake.vn` (public bank contacts); 6-digit numbers such as `394860`, which are CSS colors.
+- **Note:** `mail-template/` is gitignored, so this change lives only on the dev machine. A backup of the original file is in the session scratchpad.
+
+### 1.3-d: `test/fixtures` excluded from Biome
+
+- **Cause:** Biome 2 lints HTML and flagged the banks' CSS (`!important`). Fixtures must stay byte-for-byte what the bank sent (after anonymization); `biome check --write` would reformat them.
