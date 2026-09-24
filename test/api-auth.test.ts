@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../src/api/app';
+import { createAuth } from '../src/core/auth';
 import type { Database } from '../src/core/db/client';
 import { user } from '../src/core/db/schema';
 import type { Deps } from '../src/core/deps';
 import { createTestDb } from './db';
-import { makeDeps } from './deps';
+import { makeDeps, testEnv } from './deps';
 import { json, ORIGIN, signUp as signUpAs } from './http';
 
 let db: Database;
@@ -64,4 +65,17 @@ test('ingest stays public (token-authenticated, no session)', async () => {
 test('public config lists configured social providers', async () => {
   const res = await app.request('/api/config');
   expect(await json(res)).toEqual({ socialProviders: [], imap: false });
+});
+
+test('sign-in rate limit is per client IP, not one bucket for everybody', async () => {
+  const limitedApp = createApp(() => makeDeps(db, { auth: createAuth(db, testEnv(), undefined, 'x-client-ip') }).deps);
+  const signIn = (ip: string) =>
+    limitedApp.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ORIGIN, 'x-client-ip': ip },
+      body: JSON.stringify({ email: 'nobody@test.dev', password: 'wrong-password-123' }),
+    });
+  for (let i = 0; i < 6; i++) await signIn('198.51.100.1');
+  expect((await signIn('198.51.100.1')).status).toBe(429);
+  expect((await signIn('203.0.113.9')).status).not.toBe(429);
 });

@@ -657,3 +657,10 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 3.6-b: found by the E2E run: rate limiting had no client IP (fixed in the next commit)
 
 - better-auth logged "Rate limiting could not determine a client IP and is falling back to a single shared per-path bucket". With the sign-in rule (5/min), five failed sign-ins by anyone would lock out every user. See 3.6-c.
+
+### 3.6-c: client IP for better-auth rate limiting (fix for 3.6-b)
+
+- **Cause:** better-auth reads only `x-forwarded-for` by default. Cloudflare Workers expose the client as `cf-connecting-ip`, and a Bun server hit directly has no such header at all, so all clients fell into one bucket.
+- **Done:** `createAuth(…, ipHeader)`. The Worker passes `cf-connecting-ip` (set by Cloudflare, clients cannot forge it). The Bun server copies the socket address (`server.requestIP`) into `x-client-ip`, **overwriting** any value the client sent, and passes that header name.
+- **Tests:** unit test: 6 failed sign-ins from one IP → 429 for it, another IP still allowed. Manual test on the Bun server: rotating a forged `x-client-ip` value does not escape the limit (401 ×5, then 429).
+- **Known limit (`ponytail:` in `server.ts`):** a self-host behind a reverse proxy sees the proxy's address, i.e. one shared bucket again. Supporting `X-Forwarded-For` safely needs the proxy's address (better-auth `trustedProxies`); add an env option if someone needs it.

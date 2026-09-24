@@ -12,6 +12,7 @@ import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
 import { superviseImap } from './imap';
 
+const CLIENT_IP_HEADER = 'x-client-ip';
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 // Self-host default: webhooks usually point at an app on the LAN (design §3.4).
@@ -21,7 +22,7 @@ await migrateDb(databaseUrl); // self-host: `docker compose up` needs no separat
 const { db } = createDb(databaseUrl);
 const deps: Deps = {
   db,
-  auth: createAuth(db, env),
+  auth: createAuth(db, env, undefined, CLIENT_IP_HEADER),
   resolveTxt: dohResolveTxt,
   encryptionKey: env.ENCRYPTION_KEY,
   fetch,
@@ -49,4 +50,13 @@ const spa = serveStatic({ path: './dist/client/index.html' });
 app.use('*', serveStatic({ root: './dist/client' }));
 app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : spa(c, next)));
 
-export default { port: Number(process.env.PORT ?? 3000), fetch: app.fetch };
+export default {
+  port: Number(process.env.PORT ?? 3000),
+  // The socket address, overwriting any client-sent value, is what better-auth rate-limits by.
+  // ponytail: behind a reverse proxy this is the proxy's IP (one shared bucket); add trusted-proxy support if needed.
+  fetch(req: Request, server: Bun.Server<undefined>) {
+    const headers = new Headers(req.headers);
+    headers.set(CLIENT_IP_HEADER, server.requestIP(req)?.address ?? 'unknown');
+    return app.fetch(new Request(req, { headers }));
+  },
+};

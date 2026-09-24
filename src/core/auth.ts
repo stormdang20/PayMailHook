@@ -8,8 +8,12 @@ import type { Env } from './env';
 
 type WaitUntil = (promise: Promise<unknown>) => void;
 
-/** Design §4.4. Email verification and password reset stay off: there is no mail sender yet. */
-export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil) {
+/**
+ * Design §4.4. Email verification and password reset stay off: there is no mail sender yet.
+ * `ipHeader` names the header carrying a trustworthy client IP; without it every client shares one
+ * rate-limit bucket, so a few failed sign-ins by anyone would lock everybody out.
+ */
+export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHeader?: string) {
   const google =
     env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
       ? {
@@ -38,7 +42,10 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil) {
       customRules: { '/sign-in/email': { window: 60, max: 5 }, '/sign-up/email': { window: 60, max: 3 } },
     },
     session: { cookieCache: { enabled: true, maxAge: 300 } }, // fewer queries, fewer Neon wake-ups
-    advanced: waitUntil ? { backgroundTasks: { handler: waitUntil } } : undefined,
+    advanced: {
+      ...(waitUntil && { backgroundTasks: { handler: waitUntil } }),
+      ...(ipHeader && { ipAddress: { ipAddressHeaders: [ipHeader] } }),
+    },
     databaseHooks: {
       user: {
         create: {

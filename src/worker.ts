@@ -18,7 +18,7 @@ function makeDeps(bindings: Bindings, waitUntil?: WaitUntil): Deps {
   const { db } = createDb(bindings.HYPERDRIVE.connectionString);
   return {
     db,
-    auth: createAuth(db, env, waitUntil),
+    auth: createAuth(db, env, waitUntil, 'cf-connecting-ip'), // set by Cloudflare, not spoofable
     resolveTxt: dohResolveTxt,
     encryptionKey: env.ENCRYPTION_KEY,
     fetch: fetch.bind(globalThis),
