@@ -9,6 +9,7 @@ import { dohResolveTxt } from './core/dkim';
 import { parseEnv } from './core/env';
 import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
+import { superviseImap } from './imap';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
@@ -37,6 +38,7 @@ const open = await db
   .where(inArray(webhookDeliveries.status, ['pending', 'retrying']));
 for (const d of open) await deps.scheduleDelivery(d.id, Math.max(0, ((d.at?.getTime() ?? 0) - Date.now()) / 1000));
 setInterval(() => runMaintenance(deps).catch(console.error), 60 * 60 * 1000);
+superviseImap(deps);
 
 // Self-host serves the SPA too (dist/client from `bun run build`); unknown /api paths stay 404.
 const app = createApp(() => deps);

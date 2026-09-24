@@ -538,3 +538,21 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 2.6-d: manual check (2026-09-24)
 
 - Bun server with the built SPA; sign-up, create config (`Code.gs` contains the token), ingest of the 2 real CAKE emails → 2 transactions, 1 delivery retrying (no receiver running). Headless Chrome screenshots (CDP, session cookie from the sign-up) of `/`, `/transactions`, `/deliveries` show the data correctly (VN time, signed amounts, order code, delivery status). The sign-in/Google flow and dialogs are covered again by the Playwright E2E in 3.6.
+
+---
+
+# P2.5: Self-host
+
+## Task 2.7: IMAP listener
+
+### 2.7-a: how the listener is structured
+
+- `scan(client, seen, ingest)`: `SEARCH X-GM-RAW "from:(…) newer_than:1d"` (senders from `BANKS`, so a new bank needs no change here), fetches only UIDs not handled in this session, and adds a UID to `seen` **only after** ingest succeeded, so a DB outage retries that email on the next scan. Server-side `message_id` dedupe makes re-scans safe (design §2.6).
+- `startImap()`: one connection loop per config. Scans are serialized through a promise queue (an `exists` event during a scan does not start a second one). The config row is **re-read for every message** so webhook URL / prefix edits apply without reconnecting.
+- Authentication failure: writes `ingest_error = 'imap_auth_failed'` and stops (design §2.6). Retrying a wrong App Password risks Google locking the account.
+- `superviseImap()`: every 60 s, diffs the running listeners against `source = imap` configs that have a password and no `imap_auth_failed`. The key includes the encrypted password, so saving a new password (2.8) restarts the listener; deleting or switching a config stops it.
+
+### 2.7-b: not verified against real Gmail by the agent
+
+- Needs a Gmail App Password; listed in the user setup checklist. Unit tests cover `scan()` (once per email, retry after a failed ingest, the Gmail query) and the auth-failure stop.
+- `imapflow` is imported only by `src/server.ts`; the Worker bundle does not contain it (checked).
