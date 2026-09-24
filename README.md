@@ -119,6 +119,8 @@ bun run e2e                             # Playwright: builds the SPA, runs e2e/s
 
 ## Receiving webhooks
 
+Full reference (REST API, webhooks, MCP): [docs/api.md](docs/api.md), also served by every instance at `/docs`. To have a coding agent add PayMailHook payments to your own app, give it [docs/integration-prompt.md](docs/integration-prompt.md) (copy button on `/docs`).
+
 Each matched incoming transfer is POSTed to your URL as a [Standard Webhooks](https://www.standardwebhooks.com/) request (`webhook-id`, `webhook-timestamp`, `webhook-signature`), signed with the `whsec_…` secret shown when the config is created. Verify it with an official `standardwebhooks` library, dedupe by `webhook-id`, check both `orderId` and `amount`, and answer 2xx within 10 seconds. Payload and retry schedule: [design §3](docs/design.md#3-webhook-delivery-).
 
 ## Scope (full payhook feature set, split into phases)
