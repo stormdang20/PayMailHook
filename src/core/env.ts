@@ -27,6 +27,8 @@ const schema = z
     ALLOW_PRIVATE_WEBHOOKS: flag(false),
     VAPID_PUBLIC_KEY: optional,
     VAPID_PRIVATE_KEY: optional,
+    GOOGLE_PUBSUB_TOPIC: optional,
+    GOOGLE_PUBSUB_VERIFICATION_TOKEN: optional,
   })
   // Like react-starter-kit: one Google credential without the other is a broken deploy, not "Google off".
   .refine(
@@ -36,6 +38,10 @@ const schema = z
   .refine(
     (e) => !e.VAPID_PUBLIC_KEY === !e.VAPID_PRIVATE_KEY,
     'set both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, or neither',
+  )
+  .refine(
+    (e) => !e.GOOGLE_PUBSUB_TOPIC || (e.GOOGLE_PUBSUB_VERIFICATION_TOKEN && e.GOOGLE_CLIENT_ID),
+    'GOOGLE_PUBSUB_TOPIC needs GOOGLE_PUBSUB_VERIFICATION_TOKEN and Google sign-in (GOOGLE_CLIENT_ID/SECRET)',
   );
 
 export type Env = z.infer<typeof schema>;
@@ -47,4 +53,10 @@ export const parseEnv = (raw: Record<string, unknown>): Env => schema.parse(raw)
 export const vapidFrom = (env: Env) =>
   env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
     ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.BETTER_AUTH_URL }
+    : undefined;
+
+/** Gmail OAuth source config (P4); off unless a Pub/Sub topic is set. */
+export const gmailPushFrom = (env: Env) =>
+  env.GOOGLE_PUBSUB_TOPIC && env.GOOGLE_PUBSUB_VERIFICATION_TOKEN
+    ? { topic: env.GOOGLE_PUBSUB_TOPIC, verificationToken: env.GOOGLE_PUBSUB_VERIFICATION_TOKEN }
     : undefined;

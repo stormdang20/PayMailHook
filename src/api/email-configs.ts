@@ -21,6 +21,7 @@ const publicColumns = {
   ingestError: emailConfigs.ingestError,
   hasImapPassword: sql<boolean>`${emailConfigs.imapPasswordEnc} is not null`,
   shareToken: emailConfigs.shareToken,
+  gmailConnected: sql<boolean>`${emailConfigs.googleAccountId} is not null`,
   createdAt: emailConfigs.createdAt,
 };
 
@@ -76,7 +77,7 @@ export const emailConfigRoutes = new Hono<AppEnv>()
           gmail: z.email().transform((s) => s.trim().toLowerCase()),
           webhookUrl: webhookUrl.optional(),
           orderPrefix: orderPrefix.optional(),
-          source: z.enum(['apps_script', 'imap']).default('apps_script'),
+          source: z.enum(['apps_script', 'imap', 'gmail_oauth']).default('apps_script'),
           imapPassword: imapPassword.optional(),
         })
         .refine((b) => b.source !== 'imap' || b.imapPassword, { path: ['imapPassword'], message: 'required for imap' }),
@@ -85,6 +86,9 @@ export const emailConfigRoutes = new Hono<AppEnv>()
       const { deps } = c.var;
       const { imapPassword, ...body } = c.req.valid('json');
       if (body.source === 'imap' && !deps.imapEnabled) return c.json({ error: { code: 'imap_not_available' } }, 400);
+      if (body.source === 'gmail_oauth' && !deps.gmailPush) {
+        return c.json({ error: { code: 'gmail_oauth_not_available' } }, 400);
+      }
       const reason = urlError(deps, body.webhookUrl);
       if (reason) return c.json(badUrl(reason), 400);
       const { token, hash } = await newToken();

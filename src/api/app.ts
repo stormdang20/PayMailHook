@@ -9,6 +9,7 @@ import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
 import { deliveryRoutes } from './deliveries';
 import { emailConfigRoutes } from './email-configs';
+import { gmailRoutes } from './gmail';
 import { mcpRoutes } from './mcp';
 import { pushRoutes } from './push';
 import { qrRoutes } from './qr';
@@ -49,6 +50,7 @@ export function createApp(makeDeps: (c: Context) => Deps) {
           socialProviders: Object.keys(c.var.deps.auth.options.socialProviders ?? {}),
           imap: c.var.deps.imapEnabled,
           vapidPublicKey: c.var.deps.vapid?.publicKey ?? null,
+          gmailOAuth: Boolean(c.var.deps.gmailPush),
         }),
       )
       .get('/api/me', async (c) => {
@@ -64,6 +66,7 @@ export function createApp(makeDeps: (c: Context) => Deps) {
       .route('/api/qr', qrRoutes)
       .route('/api/share', shareRoutes)
       .route('/api/push', pushRoutes)
+      .route('/api/gmail', gmailRoutes)
       .route('/mcp', mcpRoutes)
       .post('/api/ingest', async (c) => {
         const { deps } = c.var;

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfigCard } from '@/components/config-card';
 import { type Secret, SecretDialog } from '@/components/secret-dialog';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, parseResponse } from '@/lib/api';
+import { linkGmail } from '@/lib/auth';
 import { errorMessage } from '@/lib/errors';
 
 const configs = api['email-configs'];
@@ -16,7 +18,9 @@ const configs = api['email-configs'];
 export function ConfigsPage() {
   const queryClient = useQueryClient();
   const [secrets, setSecrets] = useState<Secret[] | null>(null);
-  const [source, setSource] = useState<'apps_script' | 'imap'>('apps_script');
+  const [source, setSource] = useState<'apps_script' | 'imap' | 'gmail_oauth'>('apps_script');
+  const [params, setParams] = useSearchParams();
+  const connectId = params.get('connect');
   const { data: server } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
   const list = useQuery({ queryKey: ['email-configs'], queryFn: () => parseResponse(configs.$get()) });
   const create = useMutation({
@@ -24,6 +28,10 @@ export function ConfigsPage() {
       parseResponse(configs.$post({ json })),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['email-configs'] });
+      if (r.config.source === 'gmail_oauth') {
+        linkGmail(r.config.id); // leaves the page; the secret is shown again via "Đổi secret" if needed
+        return;
+      }
       const secret = { label: 'Webhook secret (để hệ thống của bạn xác thực chữ ký)', value: r.webhookSecret };
       setSecrets(
         r.appsScript ? [{ label: 'Apps Script (Code.gs)', value: r.appsScript, multiline: true }, secret] : [secret],
@@ -31,6 +39,20 @@ export function ConfigsPage() {
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
+
+  // Back from Google's consent screen: finish connecting that config.
+  const connect = useMutation({
+    mutationFn: (id: string) => parseResponse(api.gmail.connect[':id'].$post({ param: { id } })),
+    onSuccess: () => toast.success('Đã kết nối Gmail'),
+    onError: (e) => toast.error(errorMessage(e)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['email-configs'] }),
+  });
+  const { mutate: connectConfig } = connect;
+  useEffect(() => {
+    if (!connectId) return;
+    setParams({}, { replace: true });
+    connectConfig(connectId);
+  }, [connectId, connectConfig, setParams]);
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -64,7 +86,7 @@ export function ConfigsPage() {
             <Button type="submit" disabled={create.isPending}>
               Thêm
             </Button>
-            {server?.imap && (
+            {(server?.imap || server?.gmailOAuth) && (
               <div className="space-y-1.5">
                 <Label>Cách nhận email</Label>
                 <Select value={source} onValueChange={(v) => setSource(v as typeof source)}>
@@ -73,7 +95,8 @@ export function ConfigsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="apps_script">Apps Script (dán script vào Gmail)</SelectItem>
-                    <SelectItem value="imap">IMAP (App Password)</SelectItem>
+                    {server?.imap && <SelectItem value="imap">IMAP (App Password)</SelectItem>}
+                    {server?.gmailOAuth && <SelectItem value="gmail_oauth">Gmail OAuth (1 click)</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>

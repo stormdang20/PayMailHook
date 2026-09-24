@@ -21,6 +21,9 @@ const MESSAGES: Record<string, string> = {
   parse_failed: 'Không đọc được nội dung email (ngân hàng có thể đã đổi mẫu).',
   malformed: 'Email bị lỗi định dạng.',
   imap_auth_failed: 'Đăng nhập IMAP thất bại, hãy cập nhật App Password.',
+  gmail_auth_failed: 'Quyền đọc Gmail đã hết hạn hoặc bị thu hồi, hãy bấm "Kết nối Gmail" lại.',
+  gmail_account_mismatch: 'Tài khoản Google vừa cấp quyền không phải Gmail của cấu hình này.',
+  gmail_oauth_not_available: 'Máy chủ chưa bật Gmail OAuth.',
 };
 
 export const describe = (code: string) => MESSAGES[code] ?? code;

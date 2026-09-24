@@ -4,7 +4,14 @@ import { user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import type { AppEnv } from './app';
 
-const PUBLIC_PATHS = [/^\/api\/auth\//, /^\/api\/config$/, /^\/api\/ingest$/, /^\/api\/qr$/, /^\/api\/share\//];
+const PUBLIC_PATHS = [
+  /^\/api\/auth\//,
+  /^\/api\/config$/,
+  /^\/api\/ingest$/,
+  /^\/api\/qr$/,
+  /^\/api\/share\//,
+  /^\/api\/gmail\/pubsub$/,
+];
 
 /** Public paths authenticate on their own (better-auth, ingest token) or not at all. */
 export const isPublicPath = (path: string) => PUBLIC_PATHS.some((p) => p.test(path));

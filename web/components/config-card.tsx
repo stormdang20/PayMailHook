@@ -11,6 +11,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, parseResponse } from '@/lib/api';
+import { linkGmail } from '@/lib/auth';
 import { describe, errorMessage } from '@/lib/errors';
 import { timeAgo } from '@/lib/format';
 
@@ -87,6 +88,11 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
           <Status config={config} />
         </CardDescription>
         <CardAction className="flex gap-2">
+          {config.source === 'gmail_oauth' && !config.gmailConnected && (
+            <Button size="sm" onClick={() => linkGmail(config.id)}>
+              Kết nối Gmail
+            </Button>
+          )}
           <ShareButton
             label="Link thu ngân"
             description="Ai có link đều xem được danh sách tiền vào của Gmail này (tự cập nhật). Không lộ Gmail, webhook hay thông tin người chuyển."

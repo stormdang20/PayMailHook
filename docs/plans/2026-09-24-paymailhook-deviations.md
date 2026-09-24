@@ -725,3 +725,34 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - README's P2 scope lists "API keys", but no P2 task built a UI for them; better-auth's endpoints existed but users had no way to create a key for the REST API or `/mcp`.
 - Added `/api-keys`: list (name, first characters, created), create (key shown once in the same one-time dialog as secrets), delete. It calls the plugin's own endpoints through `authClient.apiKey.*`. The better-auth client helper `authCall()` moved to `web/lib/auth.ts` (used by admin and API keys pages).
 - Manual check on the Bun server + Postgres: key created through `/api/auth/api-key/create`, `/mcp` `initialize` and `get_payment_status` answered (`paid: true, totalAmount: 149000` for a real ingested order), no key → 401.
+
+## Task 4.4: Gmail OAuth (optional)
+
+### 4.4-a: tokens through better-auth's `linkSocial`, Gmail REST API with plain `fetch`
+
+- **Plan:** `gmail.readonly`, `users.watch` with Pub/Sub, renew by cron, `history.list`, `messages.get(format=raw)` → `ingestRawEmail` (learn from inbox-zero).
+- **Done:** the OAuth dance is better-auth's `linkSocial({ provider: 'google', scopes: [gmail.readonly] })`; the token lives in its `account` table and `auth.api.getAccessToken({ accountId, userId })` refreshes it. No second OAuth implementation, no `googleapis` package (Node-only, huge); the few Gmail REST calls are `fetch` through `deps.fetch`, so it runs on Workers and is testable with a fake API.
+- Google provider: `accessType: 'offline'` (refresh token) and `account.accountLinking.allowDifferentEmails: true` (the watched Gmail may differ from the sign-in email). Linking only happens from a signed-in session.
+
+### 4.4-b: ownership and connection
+
+- `POST /api/gmail/connect/:id` (after Google redirects to `/?connect=<id>`) tries each linked Google account, reads `users/me/profile`, and connects the one whose address equals the config's Gmail (Gmail normalization). That proves ownership like a DKIM-valid email does for the other sources. It stores `google_account_id` (better-auth `account.id`), Gmail's own spelling of the address (Pub/Sub notifications are looked up by it), starts `users.watch`, and stores `gmail_history_id` and `gmail_watch_expires_at`.
+- `users.watch` is registered **without label filters** (inbox-zero watches INBOX+SENT): user filters may move bank mail out of INBOX (same reason IMAP opens "All Mail"). Extra notifications are cheap: `history.list` with `historyTypes=messageAdded`.
+
+### 4.4-c: notifications
+
+- `POST /api/gmail/pubsub?token=<GOOGLE_PUBSUB_VERIFICATION_TOKEN>` (public; token check like inbox-zero). It decodes `{ emailAddress, historyId }`, then per connected config: `history.list` from the stored id → for each added message a `format=metadata` read of `From`; **only bank senders are downloaded** (`format=raw`) and ingested. Other mail is never fetched in full.
+- A 404 on `history.list` (history id too old, e.g. after a long outage) falls back to `messages.list q=from:(banks) newer_than:1d`; `message_id` dedupe makes re-ingesting harmless.
+- Processing happens inside the push request: errors return 5xx so Pub/Sub redelivers; unknown addresses and malformed data are acknowledged (204).
+- A token that can't be refreshed marks `ingest_error = gmail_auth_failed` (the card offers "Kết nối Gmail" again, which clears it).
+
+### 4.4-d: renewal
+
+- `runMaintenance` (hourly cron) re-watches connected configs whose watch expires within 24 h. It keeps the stored history id (the new watch's id would skip anything between them).
+
+### 4.4-e: config and limits
+
+- Env `GOOGLE_PUBSUB_TOPIC` (`projects/<project>/topics/<topic>`) + `GOOGLE_PUBSUB_VERIFICATION_TOKEN`; requires Google sign-in to be configured. `/api/config` reports `gmailOAuth` so the SPA only offers it then. Migration `0004` adds the enum value and three columns.
+- As the design says, `gmail.readonly` is a restricted scope: until Google verification/CASA, the consent screen shows the "unsafe" warning and only test users (max 100) can connect.
+- Known rough edges (`ponytail`): after creating a Gmail OAuth config the page leaves for Google immediately, so the one-time webhook secret isn't shown (rotate it from the card); if Google doesn't return a refresh token (account consented offline access before), the token stops working after an hour and the card asks to reconnect.
+- Tests: fake Gmail API: connect picks the owning account / mismatch error; push with wrong token → 403; only bank mail downloaded and stored; history id advanced; stale history → fallback; renewal keeps the history id. Not tried against real Google (user checklist).

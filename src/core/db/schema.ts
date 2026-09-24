@@ -20,7 +20,7 @@ const bytea = customType<{ data: Uint8Array }>({ dataType: () => 'bytea' });
 const tz = (name: string) => timestamp(name, { withTimezone: true });
 const createdAt = () => tz('created_at').notNull().defaultNow();
 
-export const ingestSource = pgEnum('ingest_source', ['apps_script', 'imap']);
+export const ingestSource = pgEnum('ingest_source', ['apps_script', 'imap', 'gmail_oauth']);
 export const bank = pgEnum('bank', ['CAKE', 'TIMO']);
 export const direction = pgEnum('direction', ['in', 'out']);
 export const deliveryStatus = pgEnum('delivery_status', ['pending', 'retrying', 'success', 'failed']);
@@ -44,6 +44,10 @@ export const emailConfigs = pgTable(
     webhookSecretEnc: text('webhook_secret_enc'),
     /** Public read-only link to this config's incoming transactions (cashier screen); null = not shared. */
     shareToken: text('share_token').unique(),
+    /** gmail_oauth (P4): better-auth `account.id` holding the Gmail token, and the Gmail watch state. */
+    googleAccountId: text('google_account_id'),
+    gmailHistoryId: text('gmail_history_id'),
+    gmailWatchExpiresAt: tz('gmail_watch_expires_at'),
     createdAt: createdAt(),
     updatedAt: tz('updated_at')
       .notNull()

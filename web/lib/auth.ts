@@ -10,3 +10,11 @@ export async function authCall<T>(call: Promise<{ data: T; error: { message?: st
   if (error) throw new Error(error.message ?? 'Không thành công');
   return data;
 }
+
+/** Sends the user to Google to grant read-only Gmail access, then back to connect the config. */
+export const linkGmail = (configId: string) =>
+  authClient.linkSocial({
+    provider: 'google',
+    scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+    callbackURL: `/?connect=${configId}`,
+  });

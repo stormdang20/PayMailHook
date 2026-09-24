@@ -29,6 +29,13 @@
       "when": 1790243417022,
       "tag": "0003_early_sage",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790244364448,
+      "tag": "0004_white_firelord",
+      "breakpoints": true
     }
   ]
 }

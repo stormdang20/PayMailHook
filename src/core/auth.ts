@@ -21,6 +21,8 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHead
             clientId: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,
             disableSignUp: !env.ALLOW_SIGNUP,
+            // A refresh token, so the optional Gmail OAuth source keeps working after the first hour.
+            accessType: 'offline' as const,
           },
         }
       : {};
@@ -31,6 +33,8 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHead
     database: drizzleAdapter(db, { provider: 'pg' }),
     emailAndPassword: { enabled: true, disableSignUp: !env.ALLOW_SIGNUP },
     socialProviders: google, // default scopes openid/email/profile: no CASA review needed
+    // Gmail OAuth links a second Google account whose address may differ from the sign-in email.
+    account: { accountLinking: { allowDifferentEmails: true } },
     plugins: [
       admin(),
       // The plugin's default is 10 requests per key per day, far too low for polling order status.

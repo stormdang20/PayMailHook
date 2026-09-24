@@ -13,4 +13,6 @@ export const auth = createAuth({} as Database, {
   ALLOW_PRIVATE_WEBHOOKS: false,
   VAPID_PUBLIC_KEY: undefined,
   VAPID_PRIVATE_KEY: undefined,
+  GOOGLE_PUBSUB_TOPIC: undefined,
+  GOOGLE_PUBSUB_VERIFICATION_TOKEN: undefined,
 });
