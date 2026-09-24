@@ -223,3 +223,29 @@ All 6 real sample emails in `mail-template/` verify with live DNS (the real-samp
 ### Reference check
 
 `svix-webhooks` (`webhook_http_client.rs`, `is_allowed`) filters **resolved IPs**, which requires DNS control that Workers does not give; this matches the `ponytail:` note already in design §3.4.
+
+---
+
+## Task 1.7: `ingestRawEmail`
+
+### 1.7-a: unique violation detected through `DrizzleQueryError.cause`, outside the transaction
+
+- **Plan:** "catch Postgres error code `23505`" in step 2 of `store()`.
+- **Done:** `isUniqueViolation(e)` checks `e instanceof DrizzleQueryError && e.cause.code === '23505'`; the catch wraps the whole `store()` call, not the UPDATE inside it.
+- **Cause:**
+  - drizzle-orm 0.45 wraps every driver error in `DrizzleQueryError`; the SQLSTATE is on `.cause.code` (same field for postgres.js and PGlite). Checking `e.code` would never match.
+  - In Postgres a failed statement aborts the transaction, so the error cannot be handled inside `db.transaction()`. Letting it escape rolls back the whole unit, then `reject()` writes the failure row outside it.
+- **Test:** "a Gmail already claimed by another config is rejected as to_mismatch": no transaction stored, `last_ingest_at` stays null.
+
+### 1.7-b: `raw` typed `Uint8Array<ArrayBuffer>`
+
+- Follows 1.2-b: `reject()` passes `raw` to `encrypt()`. `Request.arrayBuffer()` and `Bun.file().arrayBuffer()` both yield this type.
+
+### 1.7-c: extra test cases
+
+- `parse_failed` (unknown template) and the claimed-Gmail case above, on top of the plan's list.
+
+### 1.7-d: shared test deps in `test/deps.ts`
+
+- **Plan:** `makeDeps` defined inside `test/ingest.test.ts`.
+- **Cause:** Task 1.8 needs it too; importing a `*.test.ts` file from another test file makes `bun test` register its tests a second time.

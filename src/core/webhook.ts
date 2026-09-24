@@ -1,3 +1,5 @@
+import type { ParsedTxn } from './banks';
+
 export const newWebhookSecret = () => `whsec_${crypto.getRandomValues(new Uint8Array(24)).toBase64()}`;
 
 /** Standard Webhooks: v1,base64(HMAC-SHA256(key, "{id}.{ts}.{body}")). */
@@ -6,6 +8,36 @@ export async function signWebhook(secret: string, id: string, timestamp: number,
   const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${timestamp}.${body}`));
   return `v1,${new Uint8Array(mac).toBase64()}`;
+}
+
+type PayloadInput = ParsedTxn & { id: string; bank: string; orderId: string };
+
+/** Webhook body (design §3.1); built once per delivery and resent unchanged. */
+export function buildPayload(t: PayloadInput) {
+  const occurredAt = t.occurredAt.toISOString();
+  return {
+    type: 'payment.received',
+    timestamp: occurredAt,
+    data: {
+      orderId: t.orderId,
+      transaction: {
+        id: t.id,
+        bank: t.bank,
+        direction: t.direction,
+        amount: t.amount,
+        currency: 'VND',
+        description: t.description,
+        bankTxnId: t.bankTxnId ?? null,
+        balanceAfter: t.balanceAfter ?? null,
+        counterparty: {
+          name: t.counterparty?.name ?? null,
+          account: t.counterparty?.account ?? null,
+          bank: t.counterparty?.bank ?? null,
+        },
+        occurredAt,
+      },
+    },
+  };
 }
 
 type UrlPolicy = { allowPrivate: boolean; appHost: string };
