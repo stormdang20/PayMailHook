@@ -140,3 +140,29 @@ Every place where the implementation differs from [the plan](2026-09-24-paymailh
 ### 1.3-d: `test/fixtures` excluded from Biome
 
 - **Cause:** Biome 2 lints HTML and flagged the banks' CSS (`!important`). Fixtures must stay byte-for-byte what the bank sent (after anonymization); `biome check --write` would reformat them.
+
+---
+
+## Task 1.4: Text extraction and CAKE/Timo parsers
+
+### 1.4-a: malformed numeric entities no longer throw
+
+- **Plan:** `decodeEntity` calls `String.fromCodePoint(Number.parseInt(...))` directly.
+- **Done:** returns the entity unchanged when the code point is `NaN` or above U+10FFFF.
+- **Cause:** the entity regex `#x?[0-9a-f]+` also matches `&#abc;` (decimal parse gives `NaN`), and `&#99999999;` is out of range. `String.fromCodePoint` throws `RangeError` for both. That error is not a `ParseError`, so `ingestRawEmail` would rethrow it, `/api/ingest` would answer 5xx, and Apps Script would resend the same email forever.
+- **Why this way:** one comparison (`NaN <= x` is `false`, so it covers both cases). A test covers it.
+
+### 1.4-b: tests assert exact values from the fixtures
+
+- **Plan:** `bankTxnId: expect.any(String)`, `balanceAfter: expect.any(Number)`, and the Timo test name says "increase and decrease" but only checks an increase.
+- **Done:** exact values (`500000001`, `3000000`, counterparty object, Timo time in UTC), plus an assertion on the `timo/1.html` decrease, a `ParseError` test for unknown templates (ingest relies on that error type), and an `htmlToLines` entity test.
+- **Cause:** the plan said to fill expected values from the fixtures once they exist; `expect.any` would pass even if the wrong line were picked (e.g. own account instead of the counterparty's).
+
+### 1.4-c: zero-width non-joiner written as `‌`
+
+- **Plan:** the regex contains an invisible literal U+200C character.
+- **Why:** an invisible character in source is easy to delete by accident and impossible to review.
+
+### 1.4-d: open item for P2
+
+`extractOrderId` with an empty prefix matches any alphanumeric run. `order_prefix` defaults to `PMH`, but P2's config PATCH must reject an empty prefix (or one that becomes empty after stripping non-alphanumerics).
