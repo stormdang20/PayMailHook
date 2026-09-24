@@ -87,5 +87,5 @@ test/fixtures/   # .eml đã ẩn danh (mail-template/ gốc nằm trong .gitign
 ## Việc tiếp theo
 
 - [x] Design chi tiết: [docs/design.md](docs/design.md) (schema, luồng nhận email, webhook, API/auth, test)
-- [ ] Kế hoạch triển khai: [docs/plan.md](docs/plan.md)
+- [ ] Kế hoạch triển khai: [docs/plans/2026-09-24-paymailhook.md](docs/plans/2026-09-24-paymailhook.md)
 - [ ] Spike: `getRawContent()` của Apps Script có trả về raw giống hệt "Download original" không; đo CPU time trên Workers
