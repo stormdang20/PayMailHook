@@ -4,7 +4,8 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 ## 0. Language
 
-- Code, identifiers, code comments, commit messages: **always English**.
+- Code, identifiers, code comments, commit messages, and **all documentation** (README, `docs/`, plans, PR descriptions): **always English**. This repo is open source.
+- Exception: Vietnamese bank text that code must match (email labels, regexes, fixtures) stays verbatim.
 - Replies to the user while working: **always Vietnamese**.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
