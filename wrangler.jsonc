@@ -1,0 +1,16 @@
+{
+  "name": "paymailhook",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<hyperdrive-id>" }],
+  "queues": {
+    "producers": [{ "binding": "QUEUE", "queue": "paymailhook-deliveries" }],
+    "consumers": [{ "queue": "paymailhook-deliveries", "max_batch_size": 10, "max_retries": 10 }]
+  },
+  "triggers": { "crons": ["0 * * * *"] },
+  "vars": { "APP_HOST": "paymailhook.<account>.workers.dev", "ALLOW_PRIVATE_WEBHOOKS": "false" },
+  "secrets": { "required": ["ENCRYPTION_KEY"] },
+  // apps-script/Code.gs is bundled as a string (src/core/apps-script.ts)
+  "rules": [{ "type": "Text", "globs": ["**/*.gs"], "fallthrough": true }]
+}

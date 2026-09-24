@@ -346,3 +346,29 @@ Run against the dev Postgres container (`bun run db:migrate` works as-is because
 - Results with the 6 real emails from `mail-template/`:
   - CAKE outgoing → `stored`; CAKE incoming → `stored` + delivery; the webhook reached a local receiver and **verified with the `standardwebhooks` library**. Sending it again → `duplicate`.
   - Timo emails to the CAKE config's Gmail → `to_mismatch` (expected: different mailbox). With a second config for the Timo Gmail, all 4 → `stored` (DKIM with the Gmail `Date` retry, live DNS), amounts, direction and Vietnam time correct.
+
+---
+
+## Task 1.11: Workers entry
+
+### 1.11-a: no `withDeps` / `close()`; one app instance
+
+- **Plan:** `withDeps()` creates deps per invocation and closes the postgres.js client with `ctx.waitUntil(close())`; `createApp()` is called per request. The plan asked to check this against the latest Hyperdrive docs.
+- **Done:** `makeDeps(env)` builds a fresh client per invocation and nothing is closed; `const app = createApp((c) => makeDeps(c.env))` is created once at module scope (the deps factory still runs per request).
+- **Cause:** Cloudflare's Hyperdrive docs (via context7, "connection lifecycle" and the postgres.js example) say a new client per request is recommended and that connections from Workers to Hyperdrive are cleaned up automatically when the invocation ends; `client.end()` is not needed. The `try/finally` wrapper and the `close` plumbing have no effect, so they were deleted.
+- **Kept from the plan:** `max: 5, fetch_types: false` in `createDb` match the docs' recommended settings.
+
+### 1.11-b: `Code.gs` bundled through a wrangler `Text` rule
+
+- **Added:** `"rules": [{ "type": "Text", "globs": ["**/*.gs"], "fallthrough": true }]`.
+- **Why:** needed for `src/core/apps-script.ts` (1.10-a). The P1 Worker doesn't call `renderAppsScript` yet (tree-shaken), so it was checked with a throwaway entry that imports it: wrangler uploads `Code.gs` as a text module and the `with { type: 'text' }` import works.
+
+### 1.11-c: queue consumer retries on infrastructure errors (plan over design)
+
+- **Design §3.3:** the consumer "always `ack()`s".
+- **Plan / Done:** `ack()` after `deliver()`, `retry({ delaySeconds: 60 })` if `deliver()` throws.
+- **Why:** `deliver()` itself never throws for HTTP failures (those are recorded and rescheduled); it throws only when the DB is unreachable. Retrying the message then recovers within a minute instead of waiting for the hourly cron. The claim makes a redelivered message harmless.
+
+### Result
+
+`bun run build:worker`: total 2130 KiB, **gzip 571 KiB** (limit 3 MB), no `node:sqlite`.
