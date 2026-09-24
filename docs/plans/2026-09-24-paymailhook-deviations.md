@@ -166,3 +166,37 @@ Every place where the implementation differs from [the plan](2026-09-24-paymailh
 ### 1.4-d: open item for P2
 
 `extractOrderId` with an empty prefix matches any alphanumeric run. `order_prefix` defaults to `PMH`, but P2's config PATCH must reject an empty prefix (or one that becomes empty after stripping non-alphanumerics).
+
+---
+
+## Task 1.5: DKIM verification
+
+### 1.5-a: reject messages with more than one `From` or `To` header (security)
+
+- **Plan:** a signature passes if it is valid, from the bank domain, covers `from` and `to`, and has no `l=`.
+- **Done:** additionally, the message must contain **exactly one** `From` and one `To` header.
+- **Cause:** a DKIM verifier checks only the bottom-most instance of each signed header (RFC 6376 §5.4.2, confirmed in `mailauth/lib/tools.js` `getSigningHeaderLines`), while `postal-mime` (used by ingest for the `To` check) reads the top-most one. An attacker can take a genuine bank email sent to their own Gmail, prepend `To: victim@gmail.com`, and the signature still passes. Ingest would then accept it as the victim's mail, which defeats D6 and lets the attacker claim the victim's Gmail through the partial unique index (design §4.4, squatting protection).
+- **Why this way:** the standard fix is either "oversigning" (which we don't control, the bank signs) or refusing duplicate headers. It is 2 lines and uses the header list mailauth already parsed. A test prepends a `To` and a `From` to a validly signed email; a mutation check (guard disabled) confirmed the test fails without it.
+
+### 1.5-b: hand-rolled test signer for exact `h=` lists
+
+- **Plan:** `signedEmail({ headerList })` for "To not signed", and `signedEmail({ withDate: false })` + `insertDate` for the Timo case.
+- **Done:** a ~15-line relaxed/relaxed signer in `test/email.ts` (`signedEmailWithH`) for these two cases; the other cases still use mailauth's signer.
+- **Cause:** both plan tests passed for the wrong reason / failed:
+  - mailauth's signer only accepts `headerList` as a colon-separated string; an array (which its `.d.ts` declares) is silently replaced by the default list, which includes `to`. So "To not signed" still signed To.
+  - mailauth's signer puts only **existing** headers in `h=`. Timo's real signature lists `date` while no `Date` exists (research §3), which is exactly why Gmail's added `Date` breaks it. With mailauth's signer, `h=` has no `date`, so an inserted `Date` is simply unsigned and CAKE passed too, so the test could not show that the Date retry is limited to `gmailAddsDate` banks.
+- **Why this way:** the hand signer reproduces the real Timo signature shape. A control assertion checks that a hand-signed email with `h=from:to:subject` passes, so the helper itself is verified.
+
+### 1.5-c: test key exported as PEM
+
+- **Plan:** `publicKeyEncoding: { format: 'der' }` then `publicKey.toString('base64')`.
+- **Cause:** with the installed Node typings, the `generateKeyPairSync` overload infers `publicKey` as `string`, so `toString('base64')` fails `tsc` (TS2554).
+- **Done:** export PEM and strip the armor and whitespace, which gives the same base64 DER, with no cast.
+
+### 1.5-d: local type for mailauth's missing fields
+
+- As the plan allowed: `VerifiedSignature = DKIMResult & { signingHeaders?, canonBodyLengthLimited? }`, both confirmed in `lib/dkim/dkim-verifier.js`. No `any`.
+
+### Result
+
+All 6 real sample emails in `mail-template/` verify with live DNS (the real-sample test runs on the dev machine).
