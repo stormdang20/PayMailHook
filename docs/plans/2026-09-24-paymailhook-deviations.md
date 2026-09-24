@@ -372,3 +372,22 @@ Run against the dev Postgres container (`bun run db:migrate` works as-is because
 ### Result
 
 `bun run build:worker`: total 2130 KiB, **gzip 571 KiB** (limit 3 MB), no `node:sqlite`.
+
+---
+
+## Task 1.13: Real Gmail spike and CI
+
+### 1.13-a: CI without `actions/setup-node`, `actions/checkout@v5`
+
+- **Plan:** installs Node 22 because wrangler needs Node ≥ 22.
+- **Done:** no Node step; `build:worker` already runs wrangler on Bun (verified locally with the system Node at v20, see plan "Starting a new session"). `checkout@v5` is the current major.
+
+### 1.13-b: manual spike and push not done by the agent
+
+- Deploying to Cloudflare/Neon, pasting `Code.gs` into a real Gmail and making a real transfer need the user's accounts and money; pushing to GitHub is outward-facing. These steps are left to the user (status tracked in the plan's Task 1.13).
+
+### 1.13-c: P1 ponytail review findings (applied)
+
+- `test/email.ts`: unused `messageId` option removed.
+- `src/core/webhook.ts`: `RETRY_SCHEDULE` no longer exported (only used inside the file).
+- Everything else kept: schema/auth exports are required by drizzle and better-auth; `AppType`, `AppEnv`, `createAuth` are for P2.

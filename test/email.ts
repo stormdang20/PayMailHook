@@ -19,7 +19,6 @@ type EmailOptions = {
   to: string;
   html: string;
   domain: string;
-  messageId?: string;
   withDate?: boolean;
   maxBodyLength?: number;
 };
@@ -31,7 +30,7 @@ function unsignedMessage(o: EmailOptions) {
     `From: <${o.from}>`,
     `To: ${o.to}`,
     'Subject: test',
-    `Message-ID: ${o.messageId ?? `<${crypto.randomUUID()}@test>`}`,
+    `Message-ID: <${crypto.randomUUID()}@test>`,
     ...(o.withDate === false ? [] : [`Date: ${new Date().toUTCString()}`]),
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',

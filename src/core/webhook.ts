@@ -74,7 +74,7 @@ export function validateWebhookUrl(raw: string, policy: UrlPolicy): string | nul
   return null;
 }
 
-export const RETRY_SCHEDULE = [10, 10, 20, 30, 50, 3600, 7200, 14400, 28800];
+const RETRY_SCHEDULE = [10, 10, 20, 30, 50, 3600, 7200, 14400, 28800];
 
 type Delivery = typeof webhookDeliveries.$inferSelect;
 type Outcome = { statusCode: number | null; responseBody: string | null; error: string | null };
