@@ -7,7 +7,7 @@ import { createDb } from '../src/core/db/client';
 import { emailConfigs, user } from '../src/core/db/schema';
 import { newWebhookSecret, validateWebhookUrl } from '../src/core/webhook';
 
-const [gmail, webhookUrl, ingestUrl = 'http://localhost:3000/api/ingest'] = process.argv.slice(2);
+const [gmail, webhookUrl, ingestUrl = 'http://localhost:3010/api/ingest'] = process.argv.slice(2);
 const { DATABASE_URL, ENCRYPTION_KEY, BETTER_AUTH_URL = 'http://localhost', ALLOW_PRIVATE_WEBHOOKS } = process.env;
 if (!gmail || !webhookUrl || !DATABASE_URL || !ENCRYPTION_KEY) {
   console.error(

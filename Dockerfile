@@ -9,10 +9,10 @@ RUN bun run build \
 
 FROM oven/bun:1.3-slim
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000
+ENV NODE_ENV=production PORT=3010
 COPY --from=build /app/dist/server.js ./server.js
 COPY --from=build /app/dist/client ./dist/client
 COPY --from=build /app/migrations ./migrations
 USER bun
-EXPOSE 3000
+EXPOSE 3010
 CMD ["bun", "server.js"]

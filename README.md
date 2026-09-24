@@ -51,7 +51,7 @@ cp .env.example .env        # fill BETTER_AUTH_SECRET and ENCRYPTION_KEY
 docker compose up -d        # Postgres + app; migrations run on startup
 ```
 
-Open http://localhost:3000 and sign up. For a public host, set `BETTER_AUTH_URL` to its URL (for example `https://pay.example.com`) and put the app behind HTTPS.
+Open http://localhost:3010 and sign up. For a public host, set `BETTER_AUTH_URL` to its URL (for example `https://pay.example.com`) and put the app behind HTTPS.
 
 Two ways to feed emails in:
 - **IMAP (recommended for self-host):** turn on 2-step verification for the Gmail account, create an App Password at https://myaccount.google.com/apppasswords, then add the Gmail with the IMAP option. The container connects out to `imap.gmail.com`, so no public URL is needed.
@@ -108,8 +108,8 @@ The hourly cron re-queues stuck deliveries and deletes old logs; nothing else ne
 bun install
 cp .env.example .env                    # DATABASE_URL points at a local Postgres
 bun run db:migrate
-bun run dev                             # API on :3000 (PORT to change), with IMAP listeners
-bun run dev:web                         # SPA on :5173, proxies /api to API_URL (default http://localhost:3000)
+bun run dev                             # API + built SPA on :3010 (PORT to change), with IMAP listeners
+bun run dev:web                         # SPA with hot reload on :5173, proxies /api to API_URL (default http://localhost:3010)
 bun run check                           # Biome + tsc + bun test (PGlite, no database needed)
 bun run build:worker                    # SPA build + Worker bundle dry run
 bun run e2e                             # Playwright: builds the SPA, runs e2e/server.ts on in-memory PGlite

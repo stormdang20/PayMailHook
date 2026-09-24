@@ -53,7 +53,7 @@ app.use('*', serveStatic({ root: './dist/client' }));
 app.use('*', (c, next) => (c.req.path.startsWith('/api/') || c.req.path === '/mcp' ? next() : spa(c, next)));
 
 export default {
-  port: Number(process.env.PORT ?? 3000),
+  port: Number(process.env.PORT ?? 3010),
   // The socket address, overwriting any client-sent value, is what better-auth rate-limits by.
   // ponytail: behind a reverse proxy this is the proxy's IP (one shared bucket); add trusted-proxy support if needed.
   fetch(req: Request, server: Bun.Server<undefined>) {
