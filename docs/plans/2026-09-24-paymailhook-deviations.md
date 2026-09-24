@@ -700,3 +700,22 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - `/admin` (menu item only for `role = admin`; others are redirected to `/`) lists users (newest first, 100) with role switch, ban/unban and "set password". Everything goes through better-auth's admin plugin endpoints via `authClient.admin.*`; the server enforces the admin role (tested: a member gets 403 on `list-users` and `set-role`).
 - An admin can't change their own role or ban themselves from the UI (the plugin would allow an admin to demote themselves and lock the instance out).
 - No pagination/search yet: with the 100-user cap of Google OAuth test mode and self-host use, one page is enough.
+
+## Task 4.3: MCP server `/mcp`
+
+### 4.3-a: API key auth instead of saasmail's OAuth
+
+- saasmail's `/mcp` uses the better-auth OAuth provider (discovery documents, JWT access tokens, scopes). The plan asks for API key auth, which Xiaozhi-style clients support by a static header; OAuth would add a provider plugin, JWKS and discovery routes for no requirement here.
+- The key is accepted as `Authorization: Bearer <key>` (what MCP clients send) or `x-api-key`. The key check moved into `userFromApiKey()` in `src/api/auth.ts`, shared with `requireUser`, so bans (2.2-a) apply to MCP too.
+- Same transport pattern as saasmail: stateless, a new `McpServer` + `StreamableHTTPTransport` per request.
+
+### 4.3-b: tools
+
+- `list_transactions({ direction?, orderId?, limit ≤ 50 })`: the owner's transactions, newest first (bank, direction, amount, description, order code, payer name, time).
+- `get_payment_status({ orderId, amount? })`: sums **incoming** transfers with that order code; `paid` is true when any exist, or, with `amount`, when the sum covers it (a customer may pay in two transfers). Order codes are matched uppercase like ingest stores them.
+- Both are read-only (`readOnlyHint`). Tests call them over JSON-RPC through `/mcp` and check another user's order is invisible.
+
+### 4.3-c: routing
+
+- The route is registered with the API routes, before the SPA fallback (plan's note). The Worker's `assets.run_worker_first` now lists `/mcp`, otherwise Cloudflare would serve `index.html` for it; the Bun server's SPA fallback skips `/mcp` too.
+- Not tried with MCP Inspector or Xiaozhi by the agent (user checklist).

@@ -49,7 +49,7 @@ superviseImap(deps);
 const app = createApp(() => deps);
 const spa = serveStatic({ path: './dist/client/index.html' });
 app.use('*', serveStatic({ root: './dist/client' }));
-app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : spa(c, next)));
+app.use('*', (c, next) => (c.req.path.startsWith('/api/') || c.req.path === '/mcp' ? next() : spa(c, next)));
 
 export default {
   port: Number(process.env.PORT ?? 3000),
