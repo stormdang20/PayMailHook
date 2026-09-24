@@ -1,0 +1,5 @@
+# Reference open-source repos (clone locally, see README)
+repo-ref/
+
+# Raw bank emails contain real PII — commit only anonymized fixtures
+mail-template/
