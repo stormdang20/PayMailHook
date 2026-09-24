@@ -3,6 +3,7 @@ import { serveStatic } from 'hono/bun';
 import { createApp } from './api/app';
 import { createAuth } from './core/auth';
 import { createDb } from './core/db/client';
+import { migrateDb } from './core/db/migrate';
 import { webhookDeliveries } from './core/db/schema';
 import type { Deps } from './core/deps';
 import { dohResolveTxt } from './core/dkim';
@@ -16,6 +17,7 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required');
 // Self-host default: webhooks usually point at an app on the LAN (design §3.4).
 const env = parseEnv({ ALLOW_PRIVATE_WEBHOOKS: 'true', ...process.env });
 
+await migrateDb(databaseUrl); // self-host: `docker compose up` needs no separate migrate step
 const { db } = createDb(databaseUrl);
 const deps: Deps = {
   db,

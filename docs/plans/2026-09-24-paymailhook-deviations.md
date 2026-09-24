@@ -568,3 +568,22 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - Accepted with or without the spaces Google shows (`abcd efgh ijkl mnop`), validated as 16 letters, stored with AES-GCM (`encryptText`). Responses only carry `hasImapPassword`; tests search every response body for the password and its ciphertext.
 - A new password clears `ingest_error` (e.g. `imap_auth_failed`), so `superviseImap` restarts the listener within a minute (2.7-a).
 - For IMAP configs, creation returns `appsScript: null`; the ingest token is still generated (the column is `NOT NULL`, and switching back to Apps Script later only needs a token rotation).
+
+## Task 2.9: Dockerfile and docker-compose
+
+### 2.9-a: bundled server, no `node_modules` in the runtime image
+
+- `bun build src/server.ts --target=bun` produces one 5.7 MB file (including `Code.gs` as text). The runtime stage (`oven/bun:1.3-slim`) copies only that file, the built SPA and `migrations/`, and runs as the image's non-root `bun` user. Image size: 177 MB.
+
+### 2.9-b: migrations run inside the server at startup
+
+- **Plan:** "migrate on startup" in compose.
+- **Done:** `src/core/db/migrate.ts` (`drizzle-orm/postgres-js/migrator`) runs before the server starts listening. drizzle-kit (a dev tool with many dependencies) is not shipped, and there is no separate migrate container to order. It lives in its own file because it reads the filesystem; only the Bun entry imports it. `bun run db:migrate` still works for dev.
+
+### 2.9-c: compose reads secrets from `.env`, fails fast if missing
+
+- `BETTER_AUTH_SECRET` and `ENCRYPTION_KEY` use `${VAR:?message}`, so `docker compose up` stops with a clear message instead of starting a broken server. `DATABASE_URL` is set by compose (points at the `db` service), overriding the dev value in `.env`. Host port via `PORT` (default 3000).
+
+### 2.9-d: manual check (2026-09-24)
+
+- `docker compose -p pmh-selftest up` on port 3011: migrations applied, first sign-up got `role: admin`, `/transactions` served the SPA, process runs as `uid=1000(bun)`. The test stack, its volume and image were removed afterwards.
