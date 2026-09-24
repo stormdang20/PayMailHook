@@ -613,3 +613,8 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 - Validation: account 1–19 alphanumerics, amount a positive integer, description ≤ 50 chars.
 - Test decodes the built payload with `new QRPay(content)` (bank BIN, account, amount, purpose). Scanning with a banking app is a manual check for the user.
 - `qrcode` bundles for Workers (gzip total 1083 KiB).
+
+## Task 3.3: QR generator page
+
+- `/qr`: bank (VietQR-enabled banks from `vietnam-qr-pay`, CAKE preselected), account, optional amount and description; the preview is an `<img>` of `/api/qr`, with a "copy image link" button for embedding.
+- Considered lazy-loading the route; measured the page chunk at 10.6 KB gzip, not worth the extra code. The SPA main chunk is 187 KB gzip (up from 133 KB at 2.5, mostly the Radix dialog/select components added in 2.6).

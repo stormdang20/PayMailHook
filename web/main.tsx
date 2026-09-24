@@ -8,6 +8,7 @@ import { AuthPage } from './routes/auth-page';
 import { ConfigsPage } from './routes/configs';
 import { DeliveriesPage } from './routes/deliveries';
 import { Layout } from './routes/layout';
+import { QrPage } from './routes/qr';
 import { TransactionsPage } from './routes/transactions';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { index: true, Component: ConfigsPage },
       { path: 'transactions', Component: TransactionsPage },
       { path: 'deliveries', Component: DeliveriesPage },
+      { path: 'qr', Component: QrPage },
     ],
   },
 ]);

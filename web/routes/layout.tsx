@@ -7,6 +7,7 @@ const NAV = [
   { to: '/', label: 'Email' },
   { to: '/transactions', label: 'Giao dịch' },
   { to: '/deliveries', label: 'Webhook' },
+  { to: '/qr', label: 'Mã QR' },
 ];
 
 /** Signed-in shell: redirects to /sign-in without a session. */
