@@ -15,6 +15,37 @@ import { errorMessage } from '@/lib/errors';
 
 const configs = api['email-configs'];
 
+const external = { target: '_blank', rel: 'noreferrer', className: 'font-medium text-primary underline' };
+
+/** App Passwords only exist once 2-Step Verification is on; say so before the user hits Google's error page. */
+function ImapSteps() {
+  return (
+    <div className="space-y-1.5 text-muted-foreground text-xs">
+      <ol className="list-decimal space-y-1 pl-4">
+        <li>
+          Bật{' '}
+          <a href="https://myaccount.google.com/signinoptions/twosv" {...external}>
+            Xác minh 2 bước
+          </a>{' '}
+          cho Gmail này (dùng số điện thoại hoặc lời nhắc Google).
+        </li>
+        <li>
+          Tạo{' '}
+          <a href="https://myaccount.google.com/apppasswords" {...external}>
+            App Password
+          </a>{' '}
+          (tên tuỳ ý, ví dụ PayMailHook) và dán 16 chữ cái vào ô trên.
+        </li>
+      </ol>
+      <p>
+        Nếu Google báo "Cài đặt bạn đang tìm kiếm không khả dụng": xác minh 2 bước chưa bật, chỉ dùng khoá bảo mật, hoặc
+        tài khoản công ty đã tắt App Password. Khi đó hãy dùng cách Apps Script.
+      </p>
+      <p>Mật khẩu được mã hoá và không bao giờ hiển thị lại.</p>
+    </div>
+  );
+}
+
 export function ConfigsPage() {
   const queryClient = useQueryClient();
   const [secrets, setSecrets] = useState<Secret[] | null>(null);
@@ -111,18 +142,7 @@ export function ConfigsPage() {
                   autoComplete="off"
                   placeholder="abcd efgh ijkl mnop"
                 />
-                <p className="text-muted-foreground text-xs">
-                  Cần bật xác minh 2 bước, rồi tạo tại{' '}
-                  <a
-                    className="underline"
-                    href="https://myaccount.google.com/apppasswords"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    myaccount.google.com/apppasswords
-                  </a>
-                  . Mật khẩu được mã hoá và không bao giờ hiển thị lại.
-                </p>
+                <ImapSteps />
               </div>
             )}
           </form>
