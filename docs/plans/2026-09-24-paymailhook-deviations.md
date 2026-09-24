@@ -280,3 +280,17 @@ All 6 real sample emails in `mail-template/` verify with live DNS (the real-samp
 ### 1.8-e: `transition()` uses Drizzle's `PgUpdateSetSource` type
 
 - Lets the helper accept `sql\`…\`` values without a loose `Record<string, unknown>`.
+
+---
+
+## Task 1.9: Hono app and `POST /api/ingest`
+
+### 1.9-a: infrastructure errors answer 500 (plan), not 503 (design)
+
+- **Design §2.2 / §5.1:** `/api/ingest` returns **503** on DB/DNS failure.
+- **Plan / Done:** the global `onError` returns **500** `{error:{code:'internal'}}`.
+- **Why:** Apps Script and IMAP only treat `200 {ok:true}` as an ack, so any 5xx keeps the cursor and the email is resent; 500 vs 503 changes nothing for the sender. Following the plan avoids an ingest-specific error branch. Switch to 503 only if a client ever needs to tell "retry later" apart from bugs.
+
+### 1.9-b: note, no body size limit before reading
+
+- The token is checked **before** the body is read, so unauthenticated clients can't make the server buffer a large body. An authenticated sender can still post up to the platform limit (Workers: 100MB) before `ingestRawEmail` rejects it as `too_large`. `hono/body-limit` fixes this with one line if it is ever abused. Not added now (no request for it, design §4.6 already defers ingest rate limiting).
