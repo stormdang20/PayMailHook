@@ -15,7 +15,9 @@ const isBanned = (u: { banned: boolean | null; banExpires: Date | null } | undef
 export const requireUser: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (isPublicPath(c.req.path)) return next();
   const { auth, db } = c.var.deps;
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  // Bypass the 5-minute cookie cache: API routes hit the DB anyway, and a ban or sign-out
+  // must take effect immediately rather than when the cached cookie expires.
+  const session = await auth.api.getSession({ headers: c.req.raw.headers, query: { disableCookieCache: true } });
   if (session) {
     c.set('user', { id: session.user.id, role: session.user.role ?? null });
     return next();

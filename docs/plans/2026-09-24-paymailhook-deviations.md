@@ -687,3 +687,16 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ### 4.1-c: not verified end to end
 
 - A real notification needs a real browser profile and Google's/Mozilla's push service; listed in the user checklist. The E2E run still passes with the service worker in the build.
+
+## Task 4.2: Admin UI
+
+### 4.2-a: security fix found by the admin test: bans and sign-outs took up to 5 minutes
+
+- **Cause:** design §4.4 enables better-auth's `session.cookieCache` (5 min). `getSession()` then trusts the signed cookie without reading the session table, so a banned user (or a revoked session) kept API access until the cached cookie expired. The test "ban → `/api/me` is 401" failed with 200.
+- **Done:** `requireUser` calls `getSession({ query: { disableCookieCache: true } })`. Every protected API route queries the DB anyway, so the extra session lookup doesn't add a Neon wake-up; the cookie cache still serves the SPA's frequent `/api/auth/get-session` polls. Together with 2.2-a (banned users' API keys), a ban now cuts access immediately.
+
+### 4.2-b: the page
+
+- `/admin` (menu item only for `role = admin`; others are redirected to `/`) lists users (newest first, 100) with role switch, ban/unban and "set password". Everything goes through better-auth's admin plugin endpoints via `authClient.admin.*`; the server enforces the admin role (tested: a member gets 403 on `list-users` and `set-role`).
+- An admin can't change their own role or ban themselves from the UI (the plugin would allow an admin to demote themselves and lock the instance out).
+- No pagination/search yet: with the 100-user cap of Google OAuth test mode and self-host use, one page is enough.

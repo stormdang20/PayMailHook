@@ -23,7 +23,7 @@ export function Layout() {
         <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
           <span className="font-semibold">PayMailHook</span>
           <nav className="flex gap-4 text-sm">
-            {NAV.map((item) => (
+            {[...NAV, ...(session.user.role === 'admin' ? [{ to: '/admin', label: 'Quản trị' }] : [])].map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
