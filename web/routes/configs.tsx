@@ -1,8 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Mailbox } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfigCard } from '@/components/config-card';
+import { EmptyState } from '@/components/empty-state';
+import { OrderCode } from '@/components/order-code';
+import { PageHeader } from '@/components/page-header';
 import { type Secret, SecretDialog } from '@/components/secret-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -96,12 +100,16 @@ export function ConfigsPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Kết nối"
+        description="Gmail nhận email thông báo của CAKE hoặc Timo, và nơi PayMailHook báo khi có đơn được thanh toán."
+      />
       <Card>
         <CardHeader>
-          <CardTitle>Thêm Gmail nhận biến động số dư</CardTitle>
+          <CardTitle>Thêm Gmail</CardTitle>
           <CardDescription>
-            Gmail đang nhận email thông báo giao dịch của CAKE hoặc Timo. Nội dung chuyển khoản có dạng &nbsp;
-            <code>PMH&lt;mã đơn&gt;</code> sẽ được gửi tới URL webhook.
+            Khách chuyển khoản với nội dung như <OrderCode code="PMH123456" /> (tiền tố PMH đổi được sau khi thêm), hệ
+            thống của bạn nhận webhook cho đơn 123456.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -149,6 +157,11 @@ export function ConfigsPage() {
         </CardContent>
       </Card>
       {list.error && <p className="text-destructive text-sm">{errorMessage(list.error)}</p>}
+      {list.isSuccess && list.data.length === 0 && (
+        <EmptyState icon={Mailbox} title="Chưa kết nối Gmail nào">
+          Thêm Gmail đang nhận email biến động số dư ở form phía trên để bắt đầu.
+        </EmptyState>
+      )}
       {list.data?.map((config) => (
         <ConfigCard key={config.id} config={config} onSecrets={setSecrets} />
       ))}

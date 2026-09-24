@@ -770,3 +770,28 @@ P2 was only described at task level in the plan. Each P2 entry below records wha
 ## Left to the user (needs real accounts, devices or money)
 
 Tracked in the reply to the user and README "Next steps": Cloudflare/Neon deployment and the Task 1.13 spike (Apps Script `getRawContent()` DKIM, Workers CPU time), pushing to GitHub for CI, a real transfer, IMAP with an App Password (including reconnect after a network drop), a Web Push notification in a real browser, an MCP client, VietQR scan with a banking app, and the Gmail OAuth + Pub/Sub flow.
+
+---
+
+# Post-plan changes (user requests, 2026-09-24)
+
+## UI redesign, logo, docs page, integration prompt, 2-Step Verification link
+
+### What was asked
+
+Link to Google's 2-Step Verification in the IMAP form (App Passwords need it; the user hit "setting not available"), API docs in Markdown shown in the UI, a prompt that makes a coding agent integrate PayMailHook into another app, a logo, and a more professional UI.
+
+### Decisions
+
+- **Docs live in `docs/api.md` and `docs/integration-prompt.md`** (English, per CLAUDE.md's documentation rule; the UI chrome stays Vietnamese). The SPA imports them with `?raw` and renders them with `marked` + `@tailwindcss/typography` at `/docs` (tabs "Tài liệu API" / "Prompt tích hợp", copy button). One source for GitHub and the app. Placeholders like `https://<your-paymailhook>` are replaced with the instance's origin in the UI so copied snippets work. The old Vietnamese `/guide` page is replaced (`/guide` redirects). `test/docs-sample.test.ts` keeps the webhook payload in `api.md` identical to `buildPayload()` (replaces `web/lib/webhook-sample.ts`).
+- **Found while writing the docs:** API keys over their rate limit answered `401`; now `429` with `Retry-After` (REST and `/mcp`), tested. Separate commit.
+- **Integration prompt** makes the agent: study the codebase first; ask for the values it can't infer (URL, webhook secret, prefix, bank account, API key); implement payment codes (A–Z0–9 only), payment instructions with the `/api/qr` VietQR image, a raw-body Standard Webhooks receiver with `webhook-id` idempotency, row-locked amount matching (partial/over-payment policy asked, not guessed), an optional status-check fallback over the REST API honouring `429`, tests; then give the user a post-merge checklist ("Gửi thử", real small order) and a report.
+- **Design** (frontend-design skill): subject-driven choices rather than template defaults:
+  - Typeface **Be Vietnam Pro** (designed in Vietnam, full diacritics), self-hosted via `@fontsource` (no CDN for self-host), one family; `tabular-nums` for amounts.
+  - Palette: jade `#0E6E5C` (brand and money in), ink `#10212B`, receipt-paper canvas `#F3F6F5`, highlighter `#F2B705` used only for order codes (`<OrderCode>`), rust `#C2410C` for errors/money out.
+  - Layout: left sidebar with icons (scrolling tab bar on phones), `PageHeader` (title, one-line purpose, primary action), tables on white cards over the canvas, `EmptyState` that says what to do next. Public pages (docs, privacy, share links) share `PublicShell`.
+  - The one bold element: the sign-in page's brand panel shows a balance notification (`+149.000 đ`, `PMH123456` highlighted) turning into "webhook sent: order paid", which is what the product does.
+  - Avoided on purpose: all-caps eyebrows, middle-dot meta strings, gradient washes, identical shadowed cards.
+- **Logo:** an envelope (the bank's notification email) stamped with a yellow tick badge (paid) on a jade tile; `web/public/logo.svg` (favicon, `theme-color`) and `<LogoMark>`/`<Logo>` components. A first draft read as a checkbox at large size and was redrawn with a visible envelope flap and a badge.
+- **Accessibility:** delivery rows keep click-to-open but gained a "Chi tiết" button so the detail opens from the keyboard; the SVG logo has a `<title>`.
+- Checked with headless-Chrome screenshots (sign-in, Kết nối, Giao dịch, Tài liệu) on the E2E server with demo data; E2E selector updated for the renamed page title.

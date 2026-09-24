@@ -1,6 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Webhook } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/empty-state';
+import { OrderCode } from '@/components/order-code';
+import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -78,7 +82,7 @@ function DeliveryDetail({ id, onClose }: { id: string | null; onClose: () => voi
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{formatTime(a.createdAt)}</TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {a.statusCode ? `HTTP ${a.statusCode}` : describe(a.error ?? '')} · {a.durationMs} ms
+                      {a.statusCode ? `HTTP ${a.statusCode}` : describe(a.error ?? '')}, {a.durationMs} ms
                     </TableCell>
                     <TableCell className="max-w-xs truncate font-mono text-xs" title={a.responseBody ?? ''}>
                       {a.responseBody}
@@ -110,60 +114,77 @@ export function DeliveriesPage() {
   const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-semibold text-lg">Webhook</h1>
-        <Select value={status} onValueChange={(v) => setStatus(v as Status | 'all')}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả</SelectItem>
-            {Object.entries(STATUS).map(([value, s]) => (
-              <SelectItem key={value} value={value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {pages.error && <p className="text-destructive text-sm">{errorMessage(pages.error)}</p>}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Thời gian</TableHead>
-            <TableHead>Mã đơn</TableHead>
-            <TableHead className="text-right">Số tiền</TableHead>
-            <TableHead>Trạng thái</TableHead>
-            <TableHead>Lần gửi</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((d) => (
-            <TableRow key={d.id} className="cursor-pointer" onClick={() => setSelected(d.id)}>
-              <TableCell className="whitespace-nowrap">{formatTime(d.createdAt)}</TableCell>
-              <TableCell>{d.orderId}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatVnd(d.amount)}</TableCell>
-              <TableCell>
-                <Badge variant={STATUS[d.status].variant}>{STATUS[d.status].label}</Badge>
-              </TableCell>
-              <TableCell>
-                {d.attemptCount}
-                {d.lastStatusCode ? ` · HTTP ${d.lastStatusCode}` : ''}
-              </TableCell>
-            </TableRow>
-          ))}
-          {pages.isSuccess && rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                Chưa có webhook nào.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+    <div>
+      <PageHeader
+        title="Webhook"
+        description="Mỗi lần báo cho hệ thống của bạn về một đơn đã thanh toán, kèm phản hồi và lịch gửi lại."
+        actions={
+          <Select value={status} onValueChange={(v) => setStatus(v as Status | 'all')}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              {Object.entries(STATUS).map(([value, s]) => (
+                <SelectItem key={value} value={value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+      {pages.error && <p className="mb-4 text-destructive text-sm">{errorMessage(pages.error)}</p>}
+      {pages.isSuccess && rows.length === 0 ? (
+        <EmptyState icon={Webhook} title="Chưa có webhook nào">
+          Webhook được gửi khi có tiền vào với nội dung chứa tiền tố và mã đơn, và Gmail đó đã có URL webhook.
+        </EmptyState>
+      ) : (
+        <div className="rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Thời gian</TableHead>
+                <TableHead>Mã đơn</TableHead>
+                <TableHead className="text-right">Số tiền</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Lần gửi</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((d) => (
+                <TableRow key={d.id} className="cursor-pointer" onClick={() => setSelected(d.id)}>
+                  <TableCell className="whitespace-nowrap">{formatTime(d.createdAt)}</TableCell>
+                  <TableCell>
+                    <OrderCode code={d.orderId} />
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{formatVnd(d.amount)}</TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS[d.status].variant}>{STATUS[d.status].label}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {d.attemptCount}
+                    {d.lastStatusCode ? `, HTTP ${d.lastStatusCode}` : ''}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setSelected(d.id)}>
+                      Chi tiết
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       {pages.hasNextPage && (
-        <Button variant="outline" onClick={() => pages.fetchNextPage()} disabled={pages.isFetchingNextPage}>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => pages.fetchNextPage()}
+          disabled={pages.isFetchingNextPage}
+        >
           Xem thêm
         </Button>
       )}

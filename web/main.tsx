@@ -2,14 +2,14 @@ import './app.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { Toaster } from './components/ui/sonner';
 import { AdminPage } from './routes/admin';
 import { ApiKeysPage } from './routes/api-keys';
 import { AuthPage } from './routes/auth-page';
 import { ConfigsPage } from './routes/configs';
 import { DeliveriesPage } from './routes/deliveries';
-import { GuidePage } from './routes/guide';
+import { DocsPage } from './routes/docs';
 import { Layout } from './routes/layout';
 import { PrivacyPage } from './routes/privacy';
 import { QrPage } from './routes/qr';
@@ -21,7 +21,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, ref
 const router = createBrowserRouter([
   { path: '/sign-in', element: <AuthPage mode="sign-in" /> },
   { path: '/sign-up', element: <AuthPage mode="sign-up" /> },
-  { path: '/guide', Component: GuidePage },
+  { path: '/docs', Component: DocsPage },
+  { path: '/guide', element: <Navigate to="/docs" replace /> },
   { path: '/privacy', Component: PrivacyPage },
   { path: '/share/t/:token', Component: SharedTransactionPage },
   { path: '/share/c/:token', Component: SharedListPage },

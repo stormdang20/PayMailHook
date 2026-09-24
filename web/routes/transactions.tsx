@@ -1,5 +1,9 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { ReceiptText } from 'lucide-react';
 import { useState } from 'react';
+import { EmptyState } from '@/components/empty-state';
+import { OrderCode } from '@/components/order-code';
+import { PageHeader } from '@/components/page-header';
 import { ShareButton } from '@/components/share-button';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -32,74 +36,85 @@ export function TransactionsPage() {
   const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-semibold text-lg">Giao dịch</h1>
-        <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
-          <SelectTrigger className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="in">Tiền vào</SelectItem>
-            <SelectItem value="out">Tiền ra</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      {pages.error && <p className="text-destructive text-sm">{errorMessage(pages.error)}</p>}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Thời gian</TableHead>
-            <TableHead>Ngân hàng</TableHead>
-            <TableHead className="text-right">Số tiền</TableHead>
-            <TableHead>Nội dung</TableHead>
-            <TableHead>Mã đơn</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="whitespace-nowrap">{formatTime(t.occurredAt)}</TableCell>
-              <TableCell>{t.bank}</TableCell>
-              <TableCell
-                className={cn(
-                  'whitespace-nowrap text-right tabular-nums',
-                  t.direction === 'in' ? 'text-green-600' : 'text-red-600',
-                )}
-              >
-                {t.direction === 'in' ? '+' : '−'}
-                {formatVnd(t.amount)}
-              </TableCell>
-              <TableCell className="max-w-md truncate" title={t.description}>
-                {t.description}
-              </TableCell>
-              <TableCell>{t.orderId ?? '—'}</TableCell>
-              <TableCell className="text-right">
-                <ShareButton
-                  label="Chia sẻ"
-                  description="Ai có link đều xem được số tiền, thời gian, nội dung và mã đơn của giao dịch này (không có thông tin người chuyển)."
-                  token={t.shareToken}
-                  pathFor={(token) => `/share/t/${token}`}
-                  share={() => parseResponse(api.transactions[':id'].share.$post({ param: { id: t.id } }))}
-                  revoke={() => api.transactions[':id'].share.$delete({ param: { id: t.id } })}
-                  onChange={refresh}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-          {pages.isSuccess && rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                Chưa có giao dịch.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+    <div>
+      <PageHeader
+        title="Giao dịch"
+        description="Mọi biến động số dư đọc được từ email ngân hàng, tự cập nhật mỗi 5 giây."
+        actions={
+          <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="in">Tiền vào</SelectItem>
+              <SelectItem value="out">Tiền ra</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
+      {pages.error && <p className="mb-4 text-destructive text-sm">{errorMessage(pages.error)}</p>}
+      {pages.isSuccess && rows.length === 0 ? (
+        <EmptyState icon={ReceiptText} title="Chưa có giao dịch">
+          Giao dịch xuất hiện ở đây vài giây sau khi ngân hàng gửi email thông báo tới Gmail đã kết nối.
+        </EmptyState>
+      ) : (
+        <div className="rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Thời gian</TableHead>
+                <TableHead>Ngân hàng</TableHead>
+                <TableHead className="text-right">Số tiền</TableHead>
+                <TableHead>Nội dung</TableHead>
+                <TableHead>Mã đơn</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="whitespace-nowrap">{formatTime(t.occurredAt)}</TableCell>
+                  <TableCell>{t.bank}</TableCell>
+                  <TableCell
+                    className={cn(
+                      'whitespace-nowrap text-right tabular-nums',
+                      t.direction === 'in' ? 'font-medium text-primary' : 'text-destructive',
+                    )}
+                  >
+                    {t.direction === 'in' ? '+' : '−'}
+                    {formatVnd(t.amount)}
+                  </TableCell>
+                  <TableCell className="max-w-md truncate" title={t.description}>
+                    {t.description}
+                  </TableCell>
+                  <TableCell>
+                    <OrderCode code={t.orderId} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <ShareButton
+                      label="Chia sẻ"
+                      description="Ai có link đều xem được số tiền, thời gian, nội dung và mã đơn của giao dịch này (không có thông tin người chuyển)."
+                      token={t.shareToken}
+                      pathFor={(token) => `/share/t/${token}`}
+                      share={() => parseResponse(api.transactions[':id'].share.$post({ param: { id: t.id } }))}
+                      revoke={() => api.transactions[':id'].share.$delete({ param: { id: t.id } })}
+                      onChange={refresh}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       {pages.hasNextPage && (
-        <Button variant="outline" onClick={() => pages.fetchNextPage()} disabled={pages.isFetchingNextPage}>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => pages.fetchNextPage()}
+          disabled={pages.isFetchingNextPage}
+        >
           Xem thêm
         </Button>
       )}

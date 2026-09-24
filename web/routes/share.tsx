@@ -1,24 +1,16 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
+import { PublicShell } from '@/components/public-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, parseResponse } from '@/lib/api';
 import { formatTime, formatVnd } from '@/lib/format';
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      {children}
-      <p className="mt-6 text-center text-muted-foreground text-xs">Chia sẻ qua PayMailHook</p>
-    </div>
-  );
-}
-
 const Missing = () => (
-  <Shell>
+  <PublicShell>
     <p className="text-center text-muted-foreground">Link không tồn tại hoặc đã bị thu hồi.</p>
-  </Shell>
+  </PublicShell>
 );
 
 /** Public proof of one payment: /share/t/:token */
@@ -32,7 +24,7 @@ export function SharedTransactionPage() {
   if (txn.isError) return <Missing />;
   const t = txn.data;
   return (
-    <Shell>
+    <PublicShell>
       {t && (
         <Card>
           <CardHeader>
@@ -57,7 +49,7 @@ export function SharedTransactionPage() {
           </CardContent>
         </Card>
       )}
-    </Shell>
+    </PublicShell>
   );
 }
 
@@ -76,7 +68,7 @@ export function SharedListPage() {
   if (pages.isError) return <Missing />;
   const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
   return (
-    <Shell>
+    <PublicShell>
       <h1 className="mb-4 font-semibold text-lg">Tiền vào</h1>
       <Table>
         <TableHeader>
@@ -107,6 +99,6 @@ export function SharedListPage() {
           Xem thêm
         </Button>
       )}
-    </Shell>
+    </PublicShell>
   );
 }

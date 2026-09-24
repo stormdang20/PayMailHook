@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmButton } from '@/components/confirm-button';
+import { PageHeader } from '@/components/page-header';
 import { type Secret, SecretDialog } from '@/components/secret-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,13 +40,23 @@ export function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="API key"
+        description={
+          <>
+            Cho hệ thống của bạn gọi REST API (header <code>x-api-key</code>) hoặc cho AI agent dùng MCP server{' '}
+            <code>/mcp</code>. Tối đa 120 request mỗi phút cho mỗi key. Xem{' '}
+            <a className="text-primary underline" href="/docs">
+              tài liệu
+            </a>
+            .
+          </>
+        }
+      />
       <Card>
         <CardHeader>
-          <CardTitle>API key</CardTitle>
-          <CardDescription>
-            Dùng cho REST API (header <code>x-api-key</code>) và MCP server <code>/mcp</code> (header{' '}
-            <code>Authorization: Bearer &lt;key&gt;</code>). Tối đa 120 request/phút mỗi key.
-          </CardDescription>
+          <CardTitle>Tạo key</CardTitle>
+          <CardDescription>Đặt tên theo nơi dùng key để dễ thu hồi sau này.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="flex gap-2">
@@ -56,35 +67,37 @@ export function ApiKeysPage() {
           </form>
         </CardContent>
       </Card>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Tên</TableHead>
-            <TableHead>Bắt đầu bằng</TableHead>
-            <TableHead>Tạo lúc</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {keys.data?.apiKeys.map((k) => (
-            <TableRow key={k.id}>
-              <TableCell>{k.name}</TableCell>
-              <TableCell className="font-mono text-xs">{k.start}…</TableCell>
-              <TableCell>{formatTime(new Date(k.createdAt).toISOString())}</TableCell>
-              <TableCell className="text-right">
-                <ConfirmButton
-                  destructive
-                  title={`Xoá key "${k.name}"?`}
-                  description="Mọi hệ thống đang dùng key này sẽ bị từ chối ngay."
-                  onConfirm={() => remove.mutate(k.id)}
-                >
-                  Xoá
-                </ConfirmButton>
-              </TableCell>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tên</TableHead>
+              <TableHead>Bắt đầu bằng</TableHead>
+              <TableHead>Tạo lúc</TableHead>
+              <TableHead />
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {keys.data?.apiKeys.map((k) => (
+              <TableRow key={k.id}>
+                <TableCell>{k.name}</TableCell>
+                <TableCell className="font-mono text-xs">{k.start}…</TableCell>
+                <TableCell>{formatTime(new Date(k.createdAt).toISOString())}</TableCell>
+                <TableCell className="text-right">
+                  <ConfirmButton
+                    destructive
+                    title={`Xoá key "${k.name}"?`}
+                    description="Mọi hệ thống đang dùng key này sẽ bị từ chối ngay."
+                    onConfirm={() => remove.mutate(k.id)}
+                  >
+                    Xoá
+                  </ConfirmButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
       <SecretDialog secrets={secrets} onClose={() => setSecrets(null)} />
     </div>
   );

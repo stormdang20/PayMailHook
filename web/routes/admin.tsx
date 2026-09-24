@@ -3,6 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { Navigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmButton } from '@/components/confirm-button';
+import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -61,78 +62,85 @@ export function AdminPage() {
   if (session && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="space-y-4">
-      <h1 className="font-semibold text-lg">Người dùng</h1>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Email</TableHead>
-            <TableHead>Tạo lúc</TableHead>
-            <TableHead>Vai trò</TableHead>
-            <TableHead>Trạng thái</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.data?.users.map((u) => {
-            const self = u.id === session?.user.id;
-            return (
-              <TableRow key={u.id}>
-                <TableCell>{u.email}</TableCell>
-                <TableCell className="whitespace-nowrap">{formatTime(new Date(u.createdAt).toISOString())}</TableCell>
-                <TableCell>
-                  <Select
-                    value={u.role ?? 'user'}
-                    disabled={self}
-                    onValueChange={(role) =>
-                      act.mutate(() => run(authClient.admin.setRole({ userId: u.id, role: role as 'user' | 'admin' })))
-                    }
-                  >
-                    <SelectTrigger className="w-28">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">user</SelectItem>
-                      <SelectItem value="admin">admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  {u.banned ? (
-                    <Badge variant="destructive">Bị khoá</Badge>
-                  ) : (
-                    <Badge variant="secondary">Hoạt động</Badge>
-                  )}
-                </TableCell>
-                <TableCell className="space-x-2 text-right">
-                  <Button variant="outline" size="sm" onClick={() => setResetFor(u.id)}>
-                    Đặt mật khẩu
-                  </Button>
-                  {!self &&
-                    (u.banned ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => act.mutate(() => run(authClient.admin.unbanUser({ userId: u.id })))}
-                      >
-                        Mở khoá
-                      </Button>
+    <div>
+      <PageHeader
+        title="Quản trị"
+        description="Tài khoản trên máy chủ này: vai trò, khoá tài khoản và đặt lại mật khẩu."
+      />
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Tạo lúc</TableHead>
+              <TableHead>Vai trò</TableHead>
+              <TableHead>Trạng thái</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.data?.users.map((u) => {
+              const self = u.id === session?.user.id;
+              return (
+                <TableRow key={u.id}>
+                  <TableCell>{u.email}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatTime(new Date(u.createdAt).toISOString())}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={u.role ?? 'user'}
+                      disabled={self}
+                      onValueChange={(role) =>
+                        act.mutate(() =>
+                          run(authClient.admin.setRole({ userId: u.id, role: role as 'user' | 'admin' })),
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-28">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">user</SelectItem>
+                        <SelectItem value="admin">admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    {u.banned ? (
+                      <Badge variant="destructive">Bị khoá</Badge>
                     ) : (
-                      <ConfirmButton
-                        destructive
-                        title={`Khoá ${u.email}?`}
-                        description="Người dùng bị đăng xuất ngay; API key của họ cũng ngừng hoạt động. Webhook đang chạy vẫn tiếp tục."
-                        onConfirm={() => act.mutate(() => run(authClient.admin.banUser({ userId: u.id })))}
-                      >
-                        Khoá
-                      </ConfirmButton>
-                    ))}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                      <Badge variant="secondary">Hoạt động</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="space-x-2 text-right">
+                    <Button variant="outline" size="sm" onClick={() => setResetFor(u.id)}>
+                      Đặt mật khẩu
+                    </Button>
+                    {!self &&
+                      (u.banned ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => act.mutate(() => run(authClient.admin.unbanUser({ userId: u.id })))}
+                        >
+                          Mở khoá
+                        </Button>
+                      ) : (
+                        <ConfirmButton
+                          destructive
+                          title={`Khoá ${u.email}?`}
+                          description="Người dùng bị đăng xuất ngay; API key của họ cũng ngừng hoạt động. Webhook đang chạy vẫn tiếp tục."
+                          onConfirm={() => act.mutate(() => run(authClient.admin.banUser({ userId: u.id })))}
+                        >
+                          Khoá
+                        </ConfirmButton>
+                      ))}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
       <PasswordDialog userId={resetFor} onClose={() => setResetFor(null)} />
     </div>
   );
