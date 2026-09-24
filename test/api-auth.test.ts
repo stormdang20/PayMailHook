@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../src/api/app';
 import { createAuth } from '../src/core/auth';
 import type { Database } from '../src/core/db/client';
-import { user } from '../src/core/db/schema';
+import { apikey, user } from '../src/core/db/schema';
 import type { Deps } from '../src/core/deps';
 import { createTestDb } from './db';
 import { makeDeps, testEnv } from './deps';
@@ -78,4 +78,13 @@ test('sign-in rate limit is per client IP, not one bucket for everybody', async 
   for (let i = 0; i < 6; i++) await signIn('198.51.100.1');
   expect((await signIn('198.51.100.1')).status).toBe(429);
   expect((await signIn('203.0.113.9')).status).not.toBe(429);
+});
+
+test('an API key over its rate limit gets 429, not 401', async () => {
+  const { userId } = await signUp();
+  const { key, id } = await deps.auth.api.createApiKey({ body: { userId, name: 'busy' } });
+  await db.update(apikey).set({ requestCount: 120, lastRequest: new Date() }).where(eq(apikey.id, id));
+  const res = await app.request('/api/me', { headers: { 'x-api-key': key } });
+  expect(res.status).toBe(429);
+  expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
 });

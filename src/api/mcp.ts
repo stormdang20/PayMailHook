@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { transactions } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import type { AppEnv } from './app';
-import { userFromApiKey } from './auth';
+import { keyRejection, userFromApiKey } from './auth';
 
 const columns = {
   bank: transactions.bank,
@@ -83,9 +83,9 @@ export const mcpRoutes = new Hono<AppEnv>().all('/', async (c) => {
   const { deps } = c.var;
   // MCP clients send `Authorization: Bearer <key>`; `x-api-key` works too, like the REST API.
   const key = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1] ?? c.req.header('x-api-key');
-  const userId = await userFromApiKey(deps, key);
-  if (!userId) return c.json({ error: { code: 'unauthorized' } }, 401);
+  const check = await userFromApiKey(deps, key);
+  if (!check || !('userId' in check)) return keyRejection(check);
   const transport = new StreamableHTTPTransport();
-  await buildServer(deps, userId).connect(transport);
+  await buildServer(deps, check.userId).connect(transport);
   return transport.handleRequest(c);
 });
