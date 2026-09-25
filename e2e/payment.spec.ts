@@ -40,12 +40,16 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
     await expect(page.getByRole('row').filter({ hasText: '123456' })).toContainText('Thành công', { timeout: 1000 });
   }).toPass({ timeout: 15_000 });
 
-  // The bank drop-down really submits a single bank (Radix renders a hidden native select for forms).
+  // The bank multi-select really submits the chosen subset (hidden inputs follow the ticked boxes).
   await page.getByRole('link', { name: 'Kết nối' }).click();
-  await page.getByRole('combobox', { name: 'Ngân hàng' }).nth(1).click();
-  await page.getByRole('option', { name: 'Timo' }).click();
+  const cardBanks = page.getByRole('button', { name: 'Ngân hàng' }).nth(1);
+  await expect(cardBanks).toHaveText('Tất cả ngân hàng');
+  await cardBanks.click();
+  await page.getByRole('menuitemcheckbox', { name: 'CAKE by VPBank' }).click();
+  await page.keyboard.press('Escape');
+  await expect(cardBanks).toHaveText('Timo');
   await page.getByRole('button', { name: 'Lưu' }).click();
   await expect(page.getByText('Đã lưu')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('combobox', { name: 'Ngân hàng' }).nth(1)).toHaveText('Timo');
+  await expect(page.getByRole('button', { name: 'Ngân hàng' }).nth(1)).toHaveText('Timo');
 });
