@@ -86,7 +86,7 @@ export async function notifyIncoming(deps: Deps, userId: string, txn: ParsedTxn,
     JSON.stringify({
       title: `+${vnd} đ`,
       body: orderId ? `Đơn ${orderId}: ${txn.description}` : txn.description,
-      url: '/transactions',
+      url: '/dashboard/transactions',
     }),
   );
   await Promise.all(

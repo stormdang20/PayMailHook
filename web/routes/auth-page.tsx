@@ -33,7 +33,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to="/dashboard" replace />;
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,7 +44,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
       mode === 'sign-in' ? await signIn(String(form.get('login')).trim(), password) : await signUp(form, password);
     setPending(false);
     if (error) return setError(authError(error));
-    navigate('/');
+    navigate('/dashboard');
   }
 
   const text = TEXT[mode];
@@ -97,7 +97,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
                 variant="outline"
                 size="lg"
                 className="w-full"
-                onClick={() => authClient.signIn.social({ provider: 'google', callbackURL: '/' })}
+                onClick={() => authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })}
               >
                 <GoogleIcon />
                 {mode === 'sign-in' ? 'Đăng nhập với Google' : 'Đăng ký với Google'}

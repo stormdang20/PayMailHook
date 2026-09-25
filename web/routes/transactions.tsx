@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { ReceiptText } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { OrderCode } from '@/components/order-code';
 import { PageHeader } from '@/components/page-header';
@@ -34,6 +34,15 @@ export function TransactionsPage() {
     refetchInterval: 5000,
   });
   const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
+  // Rows that arrived while the page was open get a brief highlight; the first load and filter switches don't.
+  const seen = useRef(new Map<Direction, Set<string>>());
+  const isFresh = (id: string) => seen.current.get(direction)?.has(id) === false;
+  useEffect(() => {
+    if (!pages.data) return;
+    const ids = seen.current.get(direction) ?? new Set<string>();
+    for (const page of pages.data.pages) for (const t of page.items) ids.add(t.id);
+    seen.current.set(direction, ids);
+  }, [pages.data, direction]);
 
   return (
     <div>
@@ -41,16 +50,22 @@ export function TransactionsPage() {
         title="Giao dịch"
         description="Mọi biến động số dư đọc được từ email ngân hàng, tự cập nhật mỗi 5 giây."
         actions={
-          <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="in">Tiền vào</SelectItem>
-              <SelectItem value="out">Tiền ra</SelectItem>
-            </SelectContent>
-          </Select>
+          <>
+            <span className="flex items-center gap-2 text-muted-foreground text-xs">
+              <span className="size-2 animate-live rounded-full bg-primary motion-reduce:animate-none" />
+              Đang cập nhật
+            </span>
+            <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="in">Tiền vào</SelectItem>
+                <SelectItem value="out">Tiền ra</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
         }
       />
       {pages.error && <p className="mb-4 text-destructive text-sm">{errorMessage(pages.error)}</p>}
@@ -73,7 +88,7 @@ export function TransactionsPage() {
             </TableHeader>
             <TableBody>
               {rows.map((t) => (
-                <TableRow key={t.id}>
+                <TableRow key={t.id} className={isFresh(t.id) ? 'animate-fresh motion-reduce:animate-none' : undefined}>
                   <TableCell className="whitespace-nowrap">{formatTime(t.occurredAt)}</TableCell>
                   <TableCell>{t.bank}</TableCell>
                   <TableCell

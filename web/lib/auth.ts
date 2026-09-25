@@ -25,5 +25,5 @@ export const linkGmail = (configId: string) =>
   authClient.linkSocial({
     provider: 'google',
     scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
-    callbackURL: `/?connect=${configId}`,
+    callbackURL: `/dashboard?connect=${configId}`,
   });

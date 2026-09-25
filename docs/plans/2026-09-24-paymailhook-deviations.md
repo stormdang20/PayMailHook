@@ -806,3 +806,17 @@ Link to Google's 2-Step Verification in the IMAP form (App Passwords need it; th
 - Sign-out is an icon button with `aria-label`/`title` ("Đăng xuất") on desktop and mobile.
 - `/docs` moved into the signed-in layout (sidebar item like the other sections) instead of a separate public page; public pages (privacy, share links) no longer link to it. The Markdown source stays in `docs/` for GitHub readers.
 - Tests: HTTP sign-up with a username, sign-in with username and with email, wrong password 401, duplicate username 400; E2E fills the new field.
+
+## Landing page, /dashboard, motion, password change, QR banks (2026-09-25)
+
+- **Landing page at `/`**, modelled on payhook.codes' information architecture (viewed with headless Chrome): header with section links and **Đăng nhập / Tạo tài khoản**, hero with **Tạo tài khoản / Xem tài liệu tích hợp**, features, how it works (a real 4-step sequence, so numbered) with use cases, FAQ accordion, final call to action, footer (docs, privacy, GitHub issues for support, since there is no support mailbox). Own visual language (features as an icon list, not six identical cards). No "open source" line, per the earlier request.
+- **Routes:** the dashboard moved to `/dashboard/*` (as on payhook). Updated every internal target: sign-in redirect, Google `callbackURL`, Gmail OAuth `callbackURL`, push notification URL (`/dashboard/transactions`), admin/API-key links. `/docs` is public again for the landing page's button (wrapped in `PublicShell`); `/dashboard/docs` is the same content inside the dashboard.
+- **Motion** (skill `ui-motion`, principles only: it targets framer-motion, which isn't worth a dependency here). CSS keyframes in `@theme`, one easing curve (`--ease-silk`), all disabled with `motion-reduce:animate-none`:
+  - `animate-arrive`: the landing hero plays the product once: bank email → DKIM valid → webhook `200 OK`.
+  - `animate-live`: a slow pulse next to "Đang cập nhật" on transactions (the page really polls every 5 s).
+  - `animate-fresh`: a transaction that arrived while the page was open fades from highlight yellow; the first load and filter switches don't flash (ids seen are tracked per filter).
+  - Not added: button press (shadcn's `active:translate-y-px` already exists), dialog/toast (already animated), anything on amounts in the dashboard (data must read instantly).
+- **Password change:** account dialog (sidebar/mobile bar) using better-auth `changePassword` with "sign out other devices" on by default; a Google-only account gets a clear message instead of an error code (`AuthError` now keeps better-auth's `code`). Test: new password works, old one fails, the other device's session is revoked.
+- **QR:** `/api/qr` and the page accept only CAKE and Timo (derived from `BANKS`): a QR for another bank would send money PayMailHook never sees. The test uses a real bank key (`vietcombank`) to prove the restriction.
+- **Push toggle** is an icon button (`Bell`/`BellOff`, `aria-pressed`, tooltip).
+- **Google sign-in button** still only shows when `GOOGLE_CLIENT_ID/SECRET` are configured; the running instance has none.

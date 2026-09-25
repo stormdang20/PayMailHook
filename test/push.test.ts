@@ -116,7 +116,7 @@ test('incoming money pushes to every browser of the owner; a gone browser is rem
   const raw = await signedEmail({ from: 'no-reply@cake.vn', to: 'owner@gmail.com', html, domain: 'cake.vn' });
   expect((await ingestRawEmail(deps, config, raw)).status).toBe('stored');
   expect(sent).toHaveLength(2);
-  expect(JSON.parse(sent[0])).toMatchObject({ title: '+149.000 đ', url: '/transactions' });
+  expect(JSON.parse(sent[0])).toMatchObject({ title: '+149.000 đ', url: '/dashboard/transactions' });
   expect((await db.select().from(pushSubscriptions)).map((s) => s.endpoint)).toEqual([
     'https://push.example.com/alive',
   ]);

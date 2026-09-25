@@ -59,7 +59,7 @@ export function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
     onError: (e) => toast.error(e.message),
   });
-  if (session && !isAdmin) return <Navigate to="/" replace />;
+  if (session && !isAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
     <div>

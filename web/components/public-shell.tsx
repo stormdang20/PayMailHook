@@ -17,7 +17,10 @@ export function PublicShell({ children }: { children: ReactNode }) {
             <Link to="/privacy" className="text-muted-foreground hover:text-foreground">
               Quyền riêng tư
             </Link>
-            <Link to={session ? '/' : '/sign-in'} className="font-medium text-primary">
+            <Link to="/docs" className="text-muted-foreground hover:text-foreground">
+              Tài liệu
+            </Link>
+            <Link to={session ? '/dashboard' : '/sign-in'} className="font-medium text-primary">
               {session ? 'Mở dashboard' : 'Đăng nhập'}
             </Link>
           </nav>

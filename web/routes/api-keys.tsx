@@ -46,7 +46,7 @@ export function ApiKeysPage() {
           <>
             Cho hệ thống của bạn gọi REST API (header <code>x-api-key</code>) hoặc cho AI agent dùng MCP server{' '}
             <code>/mcp</code>. Tối đa 120 request mỗi phút cho mỗi key. Xem{' '}
-            <a className="text-primary underline" href="/docs">
+            <a className="text-primary underline" href="/dashboard/docs">
               tài liệu
             </a>
             .

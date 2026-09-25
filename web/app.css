@@ -137,3 +137,33 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Motion: one smooth curve for the whole product, used only where it carries meaning.
+ * arrive: the landing story steps (once). live: "updating" dot. fresh: a transaction that just came in.
+ * Amounts never animate in. Everything is off under prefers-reduced-motion (motion-reduce:animate-none).
+ */
+@theme {
+  --ease-silk: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-arrive: pmh-arrive 520ms var(--ease-silk) both;
+  --animate-live: pmh-live 2s ease-in-out infinite;
+  --animate-fresh: pmh-fresh 2.4s ease-out;
+
+  @keyframes pmh-arrive {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  @keyframes pmh-live {
+    50% {
+      opacity: 0.35;
+      transform: scale(0.8);
+    }
+  }
+  @keyframes pmh-fresh {
+    from {
+      background-color: color-mix(in oklab, var(--highlight) 30%, transparent);
+    }
+  }
+}

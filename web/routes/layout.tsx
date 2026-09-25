@@ -20,14 +20,14 @@ import { cn } from '@/lib/utils';
 type Item = { to: string; label: string; icon: LucideIcon };
 
 const NAV: Item[] = [
-  { to: '/', label: 'Kết nối', icon: Mailbox },
-  { to: '/transactions', label: 'Giao dịch', icon: ReceiptText },
-  { to: '/deliveries', label: 'Webhook', icon: Webhook },
-  { to: '/qr', label: 'Mã QR', icon: QrCode },
-  { to: '/api-keys', label: 'API key', icon: KeyRound },
-  { to: '/docs', label: 'Tài liệu', icon: BookOpen },
+  { to: '/dashboard', label: 'Kết nối', icon: Mailbox },
+  { to: '/dashboard/transactions', label: 'Giao dịch', icon: ReceiptText },
+  { to: '/dashboard/deliveries', label: 'Webhook', icon: Webhook },
+  { to: '/dashboard/qr', label: 'Mã QR', icon: QrCode },
+  { to: '/dashboard/api-keys', label: 'API key', icon: KeyRound },
+  { to: '/dashboard/docs', label: 'Tài liệu', icon: BookOpen },
 ];
-const ADMIN: Item = { to: '/admin', label: 'Quản trị', icon: ShieldCheck };
+const ADMIN: Item = { to: '/dashboard/admin', label: 'Quản trị', icon: ShieldCheck };
 
 function NavItem({ item }: { item: Item }) {
   return (
