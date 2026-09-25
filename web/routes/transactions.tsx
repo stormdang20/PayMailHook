@@ -17,15 +17,21 @@ type Direction = 'all' | 'in' | 'out';
 
 export function TransactionsPage() {
   const [direction, setDirection] = useState<Direction>('all');
+  const [orders, setOrders] = useState<'all' | 'with'>('all');
+  const filter = `${direction}:${orders}`;
   const queryClient = useQueryClient();
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['transactions'] });
   const pages = useInfiniteQuery({
-    queryKey: ['transactions', direction],
+    queryKey: ['transactions', direction, orders],
     initialPageParam: '',
     queryFn: ({ pageParam }) =>
       parseResponse(
         api.transactions.$get({
-          query: { ...(pageParam && { cursor: pageParam }), ...(direction !== 'all' && { direction }) },
+          query: {
+            ...(pageParam && { cursor: pageParam }),
+            ...(direction !== 'all' && { direction }),
+            ...(orders === 'with' && { hasOrder: 'true' as const }),
+          },
         }),
       ),
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -35,14 +41,14 @@ export function TransactionsPage() {
   });
   const rows = pages.data?.pages.flatMap((p) => p.items) ?? [];
   // Rows that arrived while the page was open get a brief highlight; the first load and filter switches don't.
-  const seen = useRef(new Map<Direction, Set<string>>());
-  const isFresh = (id: string) => seen.current.get(direction)?.has(id) === false;
+  const seen = useRef(new Map<string, Set<string>>());
+  const isFresh = (id: string) => seen.current.get(filter)?.has(id) === false;
   useEffect(() => {
     if (!pages.data) return;
-    const ids = seen.current.get(direction) ?? new Set<string>();
+    const ids = seen.current.get(filter) ?? new Set<string>();
     for (const page of pages.data.pages) for (const t of page.items) ids.add(t.id);
-    seen.current.set(direction, ids);
-  }, [pages.data, direction]);
+    seen.current.set(filter, ids);
+  }, [pages.data, filter]);
 
   return (
     <div>
@@ -63,6 +69,15 @@ export function TransactionsPage() {
                 <SelectItem value="all">Tất cả</SelectItem>
                 <SelectItem value="in">Tiền vào</SelectItem>
                 <SelectItem value="out">Tiền ra</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={orders} onValueChange={(v) => setOrders(v as 'all' | 'with')}>
+              <SelectTrigger className="w-44" aria-label="Lọc theo mã đơn">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Mọi giao dịch</SelectItem>
+                <SelectItem value="with">Chỉ có mã đơn</SelectItem>
               </SelectContent>
             </Select>
           </>

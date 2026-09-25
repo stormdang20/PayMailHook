@@ -94,3 +94,12 @@ test('manual retry schedules finished deliveries only, and only for the owner', 
   expect((await call(app, stranger.cookie, 'POST', `/api/webhook-deliveries/${failed.id}/retry`)).status).toBe(404);
   expect(scheduled).toHaveLength(1);
 });
+
+test('hasOrder=true keeps only transactions carrying an order code', async () => {
+  const { cookie, config } = await owner();
+  const paid = await seedTransaction(db, config, { orderId: '42' });
+  await seedTransaction(db, config, { orderId: null, description: 'chuyen tien an trua' });
+  const page = await json(await call(app, cookie, 'GET', '/api/transactions?hasOrder=true'));
+  expect(page.items.map((t: { id: string }) => t.id)).toEqual([paid.id]);
+  expect((await json(await call(app, cookie, 'GET', '/api/transactions'))).items).toHaveLength(2);
+});

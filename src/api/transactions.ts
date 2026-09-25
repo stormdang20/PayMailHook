@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { transactions } from '../core/db/schema';
@@ -39,6 +39,8 @@ export const transactionRoutes = new Hono<AppEnv>()
         configId: z.uuid().optional(),
         orderId: z.string().max(64).optional(),
         direction: z.enum(['in', 'out']).optional(),
+        // Only transactions whose description carried an order code (the ones that trigger webhooks).
+        hasOrder: z.literal('true').optional(),
       }),
     ),
     async (c) => {
@@ -52,6 +54,7 @@ export const transactionRoutes = new Hono<AppEnv>()
             q.configId ? eq(transactions.emailConfigId, q.configId) : undefined,
             q.orderId ? eq(transactions.orderId, q.orderId.toUpperCase()) : undefined,
             q.direction ? eq(transactions.direction, q.direction) : undefined,
+            q.hasOrder ? isNotNull(transactions.orderId) : undefined,
             byTime.before(q.cursor),
           ),
         )
