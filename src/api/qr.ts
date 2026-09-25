@@ -3,14 +3,17 @@ import { cors } from 'hono/cors';
 import QRCode from 'qrcode';
 import { BanksObject, QRPay } from 'vietnam-qr-pay';
 import { z } from 'zod';
+import { BANKS } from '../core/banks';
 import type { AppEnv } from './app';
 import { validate } from './validate';
 
 type QrInput = { bank: string; acc: string; amount?: number; des?: string };
 
-const banks = Object.values(BanksObject);
+// Only banks whose notification emails PayMailHook reads: a QR for any other bank would take money it can't see.
+const supported = new Set(BANKS.map((b) => b.code.toLowerCase()));
+const banks = Object.values(BanksObject).filter((b) => supported.has(b.key));
 
-/** EMVCo VietQR content; `bank` is a vietnam-qr-pay key (`cake`, `timo`…) or a 6-digit BIN. Null if unknown. */
+/** EMVCo VietQR content; `bank` is `cake`/`timo` or its 6-digit BIN. Null for other banks. */
 export function buildVietQr({ bank, acc, amount, des }: QrInput) {
   const bin = banks.find((b) => b.key === bank.toLowerCase() || b.bin === bank)?.bin;
   if (!bin) return null;

@@ -15,9 +15,11 @@ test('the VietQR payload decodes back to the same account, amount and descriptio
   expect(qr.additionalData.purpose).toBe('PMH123456');
 });
 
-test('a bank BIN works like a bank key; an unknown bank is null', () => {
+test('a bank BIN works like a bank key; only banks PayMailHook reads (CAKE, Timo) are accepted', () => {
   expect(buildVietQr({ bank: '963388', acc: '1' })).toBe(buildVietQr({ bank: 'timo', acc: '1' }));
   expect(buildVietQr({ bank: 'nope', acc: '1' })).toBeNull();
+  expect(buildVietQr({ bank: 'vietcombank', acc: '1' })).toBeNull(); // a real bank, but its emails aren't parsed
+  expect(buildVietQr({ bank: '970436', acc: '1' })).toBeNull();
 });
 
 test('GET /api/qr is public, cacheable, CORS-open SVG', async () => {

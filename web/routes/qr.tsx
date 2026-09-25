@@ -8,9 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const BANKS = Object.values(BanksObject)
-  .filter((b) => b.vietQRStatus === 1)
-  .sort((a, b) => a.shortName.localeCompare(b.shortName));
+// The banks PayMailHook reads notification emails from; other banks' transfers would never be seen.
+const BANKS = [BanksObject.cake, BanksObject.timo];
 
 export function QrPage() {
   const [form, setForm] = useState({ bank: 'cake', acc: '', amount: '', des: '' });

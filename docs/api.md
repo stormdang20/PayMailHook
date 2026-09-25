@@ -200,7 +200,7 @@ A VietQR image (SVG) customers can scan with any banking app.
 
 | Query | Required | Description |
 |---|---|---|
-| `bank` | yes | Bank key (`cake`, `timo`, `vcb`, `mb`, …) or 6-digit BIN |
+| `bank` | yes | `cake` or `timo` (or the bank's 6-digit BIN). Only banks whose emails PayMailHook reads; others answer `400 unknown_bank` |
 | `acc` | yes | Account number |
 | `amount` | no | Amount in VND |
 | `des` | no | Transfer description, e.g. `PMH123456` (max 50 characters) |
