@@ -44,12 +44,12 @@ function Choice({
   options: [string, string][];
 }) {
   return (
-    // min-w-0 lets a long value (a Gmail address) shrink to the grid column instead of widening it.
+    // min-w-0 (here and on the trigger) lets a long value (a Gmail address) shrink to the column instead of widening it.
     <div className="grid min-w-0 gap-1.5">
       <Label className="text-muted-foreground text-xs">{label}</Label>
       <Select value={value ?? ALL} onValueChange={(v) => onChange(v === ALL ? undefined : v)}>
         <SelectTrigger
-          className="w-full *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
+          className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
           aria-label={label}
           title={options.find(([v]) => v === value)?.[1]}
         >
