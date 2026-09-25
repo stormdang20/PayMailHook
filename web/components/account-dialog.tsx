@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { toast } from 'sonner';
@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { api, parseResponse } from '@/lib/api';
 import { AuthError, authCall, authClient } from '@/lib/auth';
+import { errorMessage } from '@/lib/errors';
 
 type User = { email: string; username?: string | null };
 
@@ -27,6 +29,19 @@ const MESSAGES: Record<string, string> = {
 export function AccountDialog({ user }: { user: User }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const me = useQuery({ queryKey: ['me'], enabled: open, queryFn: () => parseResponse(api.me.$get()) });
+  // Google-only accounts have no password yet: they set one (no current password to confirm).
+  const settingFirst = me.data?.hasPassword === false;
+  const setFirst = useMutation({
+    mutationFn: (newPassword: string) => parseResponse(api.me.password.$post({ json: { newPassword } })),
+    onSuccess: () => {
+      toast.success('Đã đặt mật khẩu. Giờ bạn đăng nhập được bằng email và mật khẩu.');
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      setOpen(false);
+    },
+    onError: (e) => setError(errorMessage(e)),
+  });
   const change = useMutation({
     mutationFn: (v: { currentPassword: string; newPassword: string; revokeOtherSessions: boolean }) =>
       authCall(authClient.changePassword(v)),
@@ -44,6 +59,7 @@ export function AccountDialog({ user }: { user: User }) {
     if (newPassword !== String(form.get('confirmPassword')))
       return setError('Hai lần nhập mật khẩu mới không giống nhau.');
     setError(null);
+    if (settingFirst) return setFirst.mutate(newPassword);
     change.mutate({
       currentPassword: String(form.get('currentPassword')),
       newPassword,
@@ -74,9 +90,16 @@ export function AccountDialog({ user }: { user: User }) {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <h3 className="font-medium text-sm">Đổi mật khẩu</h3>
+          <h3 className="font-medium text-sm">{settingFirst ? 'Đặt mật khẩu' : 'Đổi mật khẩu'}</h3>
+          {settingFirst && (
+            <p className="text-muted-foreground text-xs">
+              Tài khoản đang đăng nhập bằng Google. Đặt mật khẩu để đăng nhập thêm bằng email và mật khẩu.
+            </p>
+          )}
           {[
-            { name: 'currentPassword', label: 'Mật khẩu hiện tại', auto: 'current-password' },
+            ...(settingFirst
+              ? []
+              : [{ name: 'currentPassword', label: 'Mật khẩu hiện tại', auto: 'current-password' }]),
             { name: 'newPassword', label: 'Mật khẩu mới', auto: 'new-password' },
             { name: 'confirmPassword', label: 'Nhập lại mật khẩu mới', auto: 'new-password' },
           ].map((f) => (
@@ -92,13 +115,15 @@ export function AccountDialog({ user }: { user: User }) {
               />
             </div>
           ))}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="revokeOtherSessions" defaultChecked className="size-4 accent-primary" />
-            Đăng xuất khỏi các thiết bị khác
-          </label>
+          {!settingFirst && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="revokeOtherSessions" defaultChecked className="size-4 accent-primary" />
+              Đăng xuất khỏi các thiết bị khác
+            </label>
+          )}
           {error && <p className="text-destructive text-sm">{error}</p>}
-          <Button type="submit" className="w-full" disabled={change.isPending}>
-            Đổi mật khẩu
+          <Button type="submit" className="w-full" disabled={change.isPending || setFirst.isPending || me.isPending}>
+            {settingFirst ? 'Đặt mật khẩu' : 'Đổi mật khẩu'}
           </Button>
         </form>
       </DialogContent>

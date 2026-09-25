@@ -3,11 +3,34 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
 import { username } from 'better-auth/plugins/username';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from './db/client';
-import { user } from './db/schema';
+import { account, session, user } from './db/schema';
 import type { Env } from './env';
 
 type WaitUntil = (promise: Promise<unknown>) => void;
+
+/** The email in the id_token Google just returned to better-auth (already verified by that exchange). */
+function googleEmail(idToken: string | null | undefined) {
+  const payload = idToken?.split('.')[1];
+  if (!payload) return null;
+  const claims = JSON.parse(new TextDecoder().decode(Uint8Array.fromBase64(payload, { alphabet: 'base64url' })));
+  return typeof claims.email === 'string' ? claims.email.toLowerCase() : null;
+}
+
+/**
+ * Google has just proven the owner of this account's email. If the email was never verified, the password
+ * may have been set by someone else who registered it first (account pre-hijacking): drop it and every
+ * session, and mark the email verified. The owner signs in with Google and can set a new password.
+ * A Google account with another address (the Gmail OAuth source) changes nothing.
+ */
+async function claimEmail(db: Database, userId: string, email: string | null) {
+  const [owner] = await db.select().from(user).where(eq(user.id, userId));
+  if (!owner || !email || owner.email.toLowerCase() !== email || owner.emailVerified) return;
+  await db.delete(account).where(and(eq(account.userId, userId), eq(account.providerId, 'credential')));
+  await db.delete(session).where(eq(session.userId, userId));
+  await db.update(user).set({ emailVerified: true }).where(eq(user.id, userId));
+}
 
 /**
  * Design §4.4. Email verification and password reset stay off: there is no mail sender yet.
@@ -35,7 +58,8 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHead
     emailAndPassword: { enabled: true, disableSignUp: !env.ALLOW_SIGNUP },
     socialProviders: google, // default scopes openid/email/profile: no CASA review needed
     // Gmail OAuth links a second Google account whose address may differ from the sign-in email.
-    account: { accountLinking: { allowDifferentEmails: true } },
+    // One email, one account: Google sign-in with an account's email lands in that account.
+    account: { accountLinking: { enabled: true, trustedProviders: ['google'], allowDifferentEmails: true } },
     plugins: [
       admin(),
       username(), // sign in with a username or the email, like payhook.codes
@@ -61,6 +85,13 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHead
         create: {
           // Self-host convenience: whoever signs up first right after `docker compose up` is admin.
           before: async (data) => ({ data: { ...data, role: (await db.$count(user)) === 0 ? 'admin' : 'user' } }),
+        },
+      },
+      account: {
+        create: {
+          after: async (linked) => {
+            if (linked.providerId === 'google') await claimEmail(db, linked.userId, googleEmail(linked.idToken));
+          },
         },
       },
     },

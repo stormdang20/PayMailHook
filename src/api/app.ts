@@ -1,9 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
+import { z } from 'zod';
 import { sha256Hex } from '../core/crypto';
-import { emailConfigs, user } from '../core/db/schema';
+import { account, emailConfigs, user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { inboundSignature, receiveForwarded } from '../core/forwarding';
 import { ingestRawEmail } from '../core/ingest';
@@ -16,6 +17,7 @@ import { pushRoutes } from './push';
 import { qrRoutes } from './qr';
 import { shareRoutes } from './share';
 import { transactionRoutes } from './transactions';
+import { validate } from './validate';
 
 type SessionUser = { id: string; role: string | null };
 /** Constant-time string comparison for signatures. */
@@ -25,6 +27,9 @@ function timingSafeEqual(a: string, b: string) {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+const hasPassword = async (db: Deps['db'], userId: string) =>
+  (await db.$count(account, and(eq(account.userId, userId), eq(account.providerId, 'credential')))) > 0;
 
 export type AppEnv = { Variables: { deps: Deps; user: SessionUser } };
 
@@ -64,11 +69,19 @@ export function createApp(makeDeps: (c: Context) => Deps) {
         }),
       )
       .get('/api/me', async (c) => {
-        const [me] = await c.var.deps.db
+        const { db } = c.var.deps;
+        const [me] = await db
           .select({ id: user.id, email: user.email, name: user.name, role: user.role })
           .from(user)
           .where(eq(user.id, c.var.user.id));
-        return c.json(me);
+        return c.json({ ...me, hasPassword: await hasPassword(db, c.var.user.id) });
+      })
+      // Accounts that only sign in with Google can add a password (better-auth's setPassword is server-only).
+      .post('/api/me/password', validate('json', z.object({ newPassword: z.string().min(8).max(128) })), async (c) => {
+        const { deps } = c.var;
+        if (await hasPassword(deps.db, c.var.user.id)) return c.json({ error: { code: 'password_exists' } }, 400);
+        await deps.auth.api.setPassword({ body: c.req.valid('json'), headers: c.req.raw.headers });
+        return c.json({ ok: true });
       })
       .route('/api/email-configs', emailConfigRoutes)
       .route('/api/transactions', transactionRoutes)

@@ -34,6 +34,8 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const { data: session } = authClient.useSession();
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
   const [error, setError] = useState<string | null>(null);
+  // Per-field problems shown under the field: a taken username (checked on blur) or email (checked on submit).
+  const [taken, setTaken] = useState<{ username?: boolean; email?: boolean }>({});
   const [pending, setPending] = useState(false);
   if (session) return <Navigate to="/dashboard" replace />;
 
@@ -45,8 +47,25 @@ export function AuthPage({ mode }: { mode: Mode }) {
     const { error } =
       mode === 'sign-in' ? await signIn(String(form.get('login')).trim(), password) : await signUp(form, password);
     setPending(false);
+    if (error?.code?.startsWith('USER_ALREADY_EXISTS')) return setTaken((t) => ({ ...t, email: true }));
+    if (error?.code === 'USERNAME_IS_ALREADY_TAKEN') return setTaken((t) => ({ ...t, username: true }));
     if (error) return setError(authError(error));
     navigate('/dashboard');
+  }
+
+  async function checkUsername(value: string) {
+    if (!/^[A-Za-z0-9_.]{3,30}$/.test(value)) return;
+    const { data } = await authClient.isUsernameAvailable({ username: value });
+    setTaken((t) => ({ ...t, username: data?.available === false }));
+  }
+
+  function google() {
+    if (!config?.socialProviders.includes('google')) {
+      return setError(
+        'Máy chủ này chưa bật đăng nhập Google. Quản trị viên cần cấu hình GOOGLE_CLIENT_ID và GOOGLE_CLIENT_SECRET.',
+      );
+    }
+    authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' });
   }
 
   const text = TEXT[mode];
@@ -73,8 +92,31 @@ export function AuthPage({ mode }: { mode: Mode }) {
                   autoComplete="username"
                   pattern="[A-Za-z0-9_.]{3,30}"
                   title="3–30 ký tự: chữ, số, dấu gạch dưới hoặc dấu chấm"
+                  aria-invalid={taken.username || undefined}
+                  onChange={() => setTaken((t) => ({ ...t, username: false }))}
+                  onBlur={(e) => checkUsername(e.currentTarget.value.trim())}
+                  hint={
+                    taken.username ? <span className="text-destructive">Tên đăng nhập đã có người dùng.</span> : null
+                  }
                 />
-                <Field id="email" label="Email" type="email" autoComplete="email" />
+                <Field
+                  id="email"
+                  label="Email"
+                  type="email"
+                  autoComplete="email"
+                  aria-invalid={taken.email || undefined}
+                  onChange={() => setTaken((t) => ({ ...t, email: false }))}
+                  hint={
+                    taken.email ? (
+                      <span className="text-destructive">
+                        Email này đã có tài khoản.{' '}
+                        <Link to="/sign-in" className="font-medium underline">
+                          Đăng nhập ngay
+                        </Link>
+                      </span>
+                    ) : null
+                  }
+                />
               </>
             )}
             <Field
@@ -86,28 +128,21 @@ export function AuthPage({ mode }: { mode: Mode }) {
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
             />
             {error && <p className="text-destructive text-sm">{error}</p>}
-            <Button type="submit" size="lg" className="w-full" disabled={pending}>
+            <Button type="submit" size="lg" className="w-full" disabled={pending || taken.username || taken.email}>
               {text.submit}
             </Button>
           </form>
-          {config?.socialProviders.includes('google') && (
-            <>
-              <div className="flex items-center gap-3 text-muted-foreground text-xs">
-                <span className="h-px flex-1 bg-border" />
-                hoặc
-                <span className="h-px flex-1 bg-border" />
-              </div>
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full"
-                onClick={() => authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' })}
-              >
-                <GoogleIcon />
-                {mode === 'sign-in' ? 'Đăng nhập với Google' : 'Đăng ký với Google'}
-              </Button>
-            </>
-          )}
+
+          <div className="flex items-center gap-3 text-muted-foreground text-xs">
+            <span className="h-px flex-1 bg-border" />
+            hoặc
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <Button variant="outline" size="lg" className="w-full" onClick={google}>
+            <GoogleIcon />
+            {mode === 'sign-in' ? 'Đăng nhập với Google' : 'Đăng ký với Google'}
+          </Button>
+
           <p className="text-center text-muted-foreground text-sm">
             {text.question}{' '}
             <Link to={text.to} className="font-medium text-primary hover:underline">
@@ -169,7 +204,7 @@ function signUp(form: FormData, password: string) {
 }
 
 const AUTH_ERRORS: Record<string, string> = {
-  INVALID_EMAIL_OR_PASSWORD: 'Sai email hoặc mật khẩu.',
+  INVALID_EMAIL_OR_PASSWORD: 'Sai email hoặc mật khẩu. Nếu bạn đăng ký bằng Google, hãy bấm Đăng nhập với Google.',
   INVALID_USERNAME_OR_PASSWORD: 'Sai tên đăng nhập hoặc mật khẩu.',
   USERNAME_IS_ALREADY_TAKEN: 'Tên đăng nhập đã có người dùng.',
   USER_ALREADY_EXISTS: 'Email này đã có tài khoản.',
@@ -186,13 +221,18 @@ const authError = (e: { code?: string; message?: string; status?: number }) =>
   (e.status === 429 ? 'Thử quá nhiều lần, hãy đợi một phút.' : e.message) ||
   'Không thành công.';
 
-type FieldProps = { id: string; label: string } & React.ComponentProps<typeof Input>;
+type FieldProps = { id: string; label: string; hint?: React.ReactNode } & React.ComponentProps<typeof Input>;
 
-function Field({ id, label, ...input }: FieldProps) {
+function Field({ id, label, hint, ...input }: FieldProps) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} name={id} required {...input} />
+      <Input id={id} name={id} required aria-describedby={hint ? `${id}-hint` : undefined} {...input} />
+      {hint && (
+        <p id={`${id}-hint`} className="text-xs">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
