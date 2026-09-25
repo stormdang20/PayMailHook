@@ -827,3 +827,10 @@ Link to Google's 2-Step Verification in the IMAP form (App Passwords need it; th
 - `Select` defaults to Radix `position="popper"`: lists always drop down below the trigger. The previous `item-aligned` default centred the list on the selected item, so it opened both up and down.
 - QR page: a "Tạo mã QR" submit button builds the image; typing no longer requests a new QR on every keystroke.
 - Webhook URL: the user supplies it (an endpoint on their own system that PayMailHook calls); PayMailHook only issues the `whsec_` secret. The add-Gmail form now says so and that it can stay empty (dashboard, push notifications and share links still work), with a link to the integration docs.
+
+## IMAP push latency fix (2026-09-25)
+
+- **Symptom:** real CAKE transfers took 1 to 6.5 minutes to appear, although Gmail's INTERNALDATE showed each email arrived 1–4 s after the bank's time.
+- **Cause:** `session()` took `getMailboxLock()` at connect and held it for the whole connection. imapflow treats a held lock as "busy" (`connectionBusy()` in `imap-flow.js`) and never starts auto-IDLE, so Gmail never pushed `EXISTS`; new mail only surfaced with imapflow's periodic keepalive NOOP (about every 5 minutes) or a restart. The earlier transfers were processed exactly 5 minutes apart.
+- **Fix:** select the mailbox with `mailboxOpen()` and take the lock only around each scan. After 15 s of inactivity imapflow starts IDLE and Gmail pushes new mail immediately.
+- **Checked:** unit test (the lock count is 0 between scans; failed before the fix) and against real Gmail: lock held for the session → `idling: false` after 18 s; lock only during the scan → `idling: true`.

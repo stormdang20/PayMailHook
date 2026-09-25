@@ -8,7 +8,7 @@ import type { Deps } from './core/deps';
 import { ingestRawEmail } from './core/ingest';
 
 export type ImapClient = Pick<ImapFlow, 'search' | 'fetchAll'>;
-type Connection = ImapClient & Pick<ImapFlow, 'connect' | 'list' | 'getMailboxLock' | 'on' | 'logout'>;
+type Connection = ImapClient & Pick<ImapFlow, 'connect' | 'list' | 'mailboxOpen' | 'getMailboxLock' | 'on' | 'logout'>;
 type MakeClient = (user: string, pass: string) => Connection;
 
 const QUERY = `from:(${BANKS.flatMap((b) => b.senders).join(' OR ')}) newer_than:1d`;
@@ -61,7 +61,9 @@ async function session(deps: Deps, config: EmailConfig, client: Connection, seen
   await client.connect();
   // "All Mail": the user's filters may move bank mail out of INBOX.
   const all = (await client.list()).find((m) => m.specialUse === '\\All')?.path ?? 'INBOX';
-  const lock = await client.getMailboxLock(all);
+  // Select the mailbox but hold its lock only while scanning: imapflow only IDLEs on a connection with no
+  // lock held, and without IDLE Gmail's new-mail push arrives only with the ~5-minute keepalive.
+  await client.mailboxOpen(all);
   signal?.addEventListener('abort', () => client.logout().catch(console.error), { once: true });
   const ingest = async (raw: Uint8Array<ArrayBuffer>) => {
     // Re-read the config: webhook URL or prefix may have changed since the connection opened.
@@ -70,12 +72,20 @@ async function session(deps: Deps, config: EmailConfig, client: Connection, seen
   };
   let queue = Promise.resolve();
   const trigger = () => {
-    queue = queue.then(() => scan(client, seen, ingest)).catch(console.error);
+    queue = queue
+      .then(async () => {
+        const lock = await client.getMailboxLock(all);
+        try {
+          await scan(client, seen, ingest);
+        } finally {
+          lock.release();
+        }
+      })
+      .catch(console.error);
   };
   client.on('exists', trigger);
   trigger();
   await closed;
-  lock.release();
 }
 
 /** Keeps one config connected with backoff; stops on abort or on an authentication failure. */

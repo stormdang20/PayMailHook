@@ -70,3 +70,42 @@ test('an authentication failure is recorded and the listener stops reconnecting'
   expect(row.ingestError).toBe('imap_auth_failed');
   expect(connects).toBe(1);
 });
+
+test('the mailbox lock is released after each scan, so the connection can IDLE for push', async () => {
+  const config = await seedConfig(db, {
+    source: 'imap',
+    imapPasswordEnc: await encryptText(TEST_KEY, 'abcdefghijklmnop'),
+  });
+  let held = 0;
+  let close = () => {};
+  let scanned!: () => void;
+  const scanDone = new Promise<void>((r) => {
+    scanned = r;
+  });
+  const fake = () => ({
+    on: (event: string, fn: () => void) => {
+      if (event === 'close') close = fn;
+    },
+    connect: async () => {},
+    list: async () => [{ path: '[Gmail]/All Mail', specialUse: '\\All' }],
+    mailboxOpen: async () => ({}),
+    getMailboxLock: async () => {
+      held++;
+      return { release: () => held-- };
+    },
+    search: async () => {
+      queueMicrotask(scanned);
+      return [];
+    },
+    fetchAll: async () => [],
+    logout: async () => {},
+  });
+  const controller = new AbortController();
+  const running = startImap(makeDeps(db).deps, config, fake as never, controller.signal);
+  await scanDone;
+  await Bun.sleep(10);
+  expect(held).toBe(0); // idle between scans: nothing holds the mailbox
+  controller.abort();
+  close();
+  await running;
+});
