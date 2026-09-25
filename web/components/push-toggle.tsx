@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, BellOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { api, parseResponse } from '@/lib/api';
@@ -23,9 +24,18 @@ export function PushToggle() {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Không bật được thông báo'),
   });
   if (!vapidKey || !pushSupported() || subscribed.data === undefined) return null;
+  const label = subscribed.data ? 'Tắt thông báo tiền vào' : 'Bật thông báo tiền vào';
   return (
-    <Button variant="ghost" size="sm" onClick={() => toggle.mutate()} disabled={toggle.isPending}>
-      {subscribed.data ? 'Tắt thông báo' : 'Bật thông báo'}
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      title={label}
+      aria-pressed={subscribed.data}
+      onClick={() => toggle.mutate()}
+      disabled={toggle.isPending}
+    >
+      {subscribed.data ? <Bell className="text-primary" /> : <BellOff />}
     </Button>
   );
 }
