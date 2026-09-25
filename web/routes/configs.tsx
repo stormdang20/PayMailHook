@@ -51,14 +51,55 @@ function ImapSteps() {
   );
 }
 
+type Source = 'imap' | 'apps_script' | 'gmail_oauth' | 'forwarding';
+
+const SOURCES: { value: Source; label: string; help: string; unavailable: string }[] = [
+  {
+    value: 'imap',
+    label: 'IMAP (App Password)',
+    help: 'Nhanh nhất: máy chủ giữ kết nối tới Gmail và nhận email ngay khi tới. Cần App Password của Gmail.',
+    unavailable: 'chỉ có ở bản tự cài',
+  },
+  {
+    value: 'gmail_oauth',
+    label: 'Đăng nhập Google (Gmail OAuth)',
+    help: 'Cấp quyền đọc Gmail bằng tài khoản Google, không cần mật khẩu hay script. Google đẩy email mới về ngay.',
+    unavailable: 'máy chủ chưa bật',
+  },
+  {
+    value: 'forwarding',
+    label: 'Chuyển tiếp email',
+    help: 'Gmail tự chuyển tiếp email ngân hàng tới một địa chỉ riêng của PayMailHook. Không cần mật khẩu hay script.',
+    unavailable: 'máy chủ chưa bật',
+  },
+  {
+    value: 'apps_script',
+    label: 'Apps Script',
+    help: 'Dán một đoạn script vào Gmail, script gửi email ngân hàng về mỗi phút. Cần máy chủ có địa chỉ public.',
+    unavailable: '',
+  },
+];
+
 export function ConfigsPage() {
   const queryClient = useQueryClient();
   const [secrets, setSecrets] = useState<Secret[] | null>(null);
-  const [source, setSource] = useState<'apps_script' | 'imap' | 'gmail_oauth'>('apps_script');
+  const [chosen, setSource] = useState<Source | null>(null);
   const [params, setParams] = useSearchParams();
   const connectId = params.get('connect');
   const { data: server } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
-  const list = useQuery({ queryKey: ['email-configs'], queryFn: () => parseResponse(configs.$get()) });
+  // IMAP is the default wherever the server can run it (self-host); Apps Script otherwise.
+  const source: Source = chosen ?? (server?.imap ? 'imap' : 'apps_script');
+  const available = (s: Source) =>
+    s === 'apps_script' ||
+    (s === 'imap' && server?.imap) ||
+    (s === 'gmail_oauth' && server?.gmailOAuth) ||
+    (s === 'forwarding' && server?.forwarding);
+  const list = useQuery({
+    queryKey: ['email-configs'],
+    queryFn: () => parseResponse(configs.$get()),
+    // While a forwarding setup waits for Gmail's confirmation code or first email, check every 10 s.
+    refetchInterval: (q) => (q.state.data?.some((c) => c.source === 'forwarding' && !c.lastIngestAt) ? 10_000 : false),
+  });
   const create = useMutation({
     mutationFn: (json: {
       gmail: string;
@@ -127,6 +168,25 @@ export function ConfigsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[12rem_1fr_1fr_auto] sm:items-end">
+            <div className="grid gap-1.5 sm:col-span-4 sm:grid-cols-[16rem_1fr] sm:items-center sm:gap-x-4">
+              <Label htmlFor="source" className="sm:col-span-2">
+                Cách nhận email
+              </Label>
+              <Select value={source} onValueChange={(v) => setSource(v as Source)}>
+                <SelectTrigger id="source" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOURCES.map((s) => (
+                    <SelectItem key={s.value} value={s.value} disabled={!available(s.value)}>
+                      {s.label}
+                      {!available(s.value) && <span className="text-muted-foreground text-xs"> ({s.unavailable})</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">{SOURCES.find((s) => s.value === source)?.help}</p>
+            </div>
             <BankPicker />
             <div className="space-y-1.5">
               <Label htmlFor="gmail">Gmail</Label>
@@ -147,21 +207,6 @@ export function ConfigsPage() {
                 Cách tích hợp
               </Link>
             </p>
-            {(server?.imap || server?.gmailOAuth) && (
-              <div className="space-y-1.5">
-                <Label>Cách nhận email</Label>
-                <Select value={source} onValueChange={(v) => setSource(v as typeof source)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="apps_script">Apps Script (dán script vào Gmail)</SelectItem>
-                    {server?.imap && <SelectItem value="imap">IMAP (App Password)</SelectItem>}
-                    {server?.gmailOAuth && <SelectItem value="gmail_oauth">Gmail OAuth (1 click)</SelectItem>}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
             {source === 'imap' && (
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="imapPassword">App Password của Gmail</Label>

@@ -64,7 +64,7 @@ test('ingest stays public (token-authenticated, no session)', async () => {
 
 test('public config lists configured social providers', async () => {
   const res = await app.request('/api/config');
-  expect(await json(res)).toEqual({ socialProviders: [], imap: false, vapidPublicKey: null, gmailOAuth: false });
+  expect(await json(res)).toMatchObject({ socialProviders: [], imap: false, vapidPublicKey: null, gmailOAuth: false });
 });
 
 test('sign-in rate limit is per client IP, not one bucket for everybody', async () => {

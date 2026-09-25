@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   /^\/api\/qr$/,
   /^\/api\/share\//,
   /^\/api\/gmail\/pubsub$/,
+  /^\/api\/inbound$/, // authenticated by the relay's HMAC signature
 ];
 
 /** Public paths authenticate on their own (better-auth, ingest token) or not at all. */

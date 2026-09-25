@@ -1,6 +1,7 @@
 import type { Auth } from './auth';
 import type { Database } from './db/client';
 import type { ResolveTxt } from './dkim';
+import type { Inbound } from './forwarding';
 import type { GmailPush } from './gmail-oauth';
 import type { Vapid } from './push';
 
@@ -19,6 +20,8 @@ export type Deps = {
   vapid?: Vapid;
   /** Gmail OAuth source; off when absent. */
   gmailPush?: GmailPush;
+  /** Forwarding source: our inbound mail domain (and the relay secret for self-host); off when absent. */
+  inbound?: Inbound;
   /** Public origin, e.g. https://paymailhook.example.workers.dev */
   appUrl: string;
   scheduleDelivery: (id: string, delaySeconds: number, trigger?: Trigger) => Promise<void>;

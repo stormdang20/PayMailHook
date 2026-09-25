@@ -29,6 +29,8 @@ const schema = z
     VAPID_PRIVATE_KEY: optional,
     GOOGLE_PUBSUB_TOPIC: optional,
     GOOGLE_PUBSUB_VERIFICATION_TOKEN: optional,
+    INBOUND_EMAIL_DOMAIN: optional,
+    INBOUND_WEBHOOK_SECRET: optional,
   })
   // Like react-starter-kit: one Google credential without the other is a broken deploy, not "Google off".
   .refine(
@@ -60,3 +62,7 @@ export const gmailPushFrom = (env: Env) =>
   env.GOOGLE_PUBSUB_TOPIC && env.GOOGLE_PUBSUB_VERIFICATION_TOKEN
     ? { topic: env.GOOGLE_PUBSUB_TOPIC, verificationToken: env.GOOGLE_PUBSUB_VERIFICATION_TOKEN }
     : undefined;
+
+/** Forwarding source config; off unless an inbound mail domain is set. */
+export const inboundFrom = (env: Env) =>
+  env.INBOUND_EMAIL_DOMAIN ? { domain: env.INBOUND_EMAIL_DOMAIN, secret: env.INBOUND_WEBHOOK_SECRET } : undefined;

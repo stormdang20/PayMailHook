@@ -5,6 +5,7 @@ import { renderAppsScript } from '../core/apps-script';
 import { encryptText, randomToken, sha256Hex } from '../core/crypto';
 import { emailConfigs } from '../core/db/schema';
 import type { Deps } from '../core/deps';
+import { newForwardingAddress } from '../core/forwarding';
 import { buildPayload, newWebhookSecret, postWebhook, urlPolicy, validateWebhookUrl } from '../core/webhook';
 import type { AppEnv } from './app';
 import { share, unshare } from './share';
@@ -22,6 +23,8 @@ const publicColumns = {
   ingestError: emailConfigs.ingestError,
   hasImapPassword: sql<boolean>`${emailConfigs.imapPasswordEnc} is not null`,
   shareToken: emailConfigs.shareToken,
+  forwardingAddress: emailConfigs.forwardingAddress,
+  forwardingConfirmation: emailConfigs.forwardingConfirmation,
   gmailConnected: sql<boolean>`${emailConfigs.googleAccountId} is not null`,
   createdAt: emailConfigs.createdAt,
 };
@@ -84,7 +87,7 @@ export const emailConfigRoutes = new Hono<AppEnv>()
           webhookUrl: webhookUrl.optional(),
           orderPrefix: orderPrefix.optional(),
           banks: banks.optional(),
-          source: z.enum(['apps_script', 'imap', 'gmail_oauth']).default('apps_script'),
+          source: z.enum(['apps_script', 'imap', 'gmail_oauth', 'forwarding']).default('apps_script'),
           imapPassword: imapPassword.optional(),
         })
         .refine((b) => b.source !== 'imap' || b.imapPassword, { path: ['imapPassword'], message: 'required for imap' }),
@@ -93,6 +96,8 @@ export const emailConfigRoutes = new Hono<AppEnv>()
       const { deps } = c.var;
       const { imapPassword, ...body } = c.req.valid('json');
       if (body.source === 'imap' && !deps.imapEnabled) return c.json({ error: { code: 'imap_not_available' } }, 400);
+      if (body.source === 'forwarding' && !deps.inbound)
+        return c.json({ error: { code: 'forwarding_not_available' } }, 400);
       if (body.source === 'gmail_oauth' && !deps.gmailPush) {
         return c.json({ error: { code: 'gmail_oauth_not_available' } }, 400);
       }
@@ -108,6 +113,8 @@ export const emailConfigRoutes = new Hono<AppEnv>()
           ingestTokenHash: hash,
           webhookSecretEnc: await encryptText(deps.encryptionKey, webhookSecret),
           imapPasswordEnc: imapPassword ? await encryptText(deps.encryptionKey, imapPassword) : null,
+          forwardingAddress:
+            body.source === 'forwarding' && deps.inbound ? newForwardingAddress(deps.inbound.domain) : null,
         })
         .returning(publicColumns);
       // Shown once: only the hash and the encrypted secret are stored.

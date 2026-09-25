@@ -93,6 +93,7 @@ The hourly cron re-queues stuck deliveries and deletes old logs; nothing else ne
 | Sign in with Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth client of type "Web application"; redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google` |
 | Web Push on incoming money | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | `bun scripts/generate-vapid.ts` prints a pair; users click "Bật thông báo" |
 | Gmail OAuth source (1-click, no script) | `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN` + Google sign-in | See below. `gmail.readonly` is a restricted scope: "unsafe" warning and max 100 test users until Google's verification |
+| Forwarding source (Gmail forwards bank mail to PayMailHook) | `INBOUND_EMAIL_DOMAIN` (+ `INBOUND_WEBHOOK_SECRET` for self-host) | A domain on Cloudflare with Email Routing. Hosted: catch-all → this Worker. Self-host: catch-all → [deploy/email-relay](deploy/email-relay/README.md). The dashboard shows each Gmail's address and Gmail's confirmation code |
 | API keys / MCP | nothing | Create keys on the "API key" page. REST: header `x-api-key`. MCP endpoint `<app>/mcp` with `Authorization: Bearer <key>`; tools `list_transactions`, `get_payment_status` |
 
 **Gmail OAuth setup** (Google Cloud project of the OAuth client):

@@ -149,7 +149,8 @@ A config is one Gmail inbox plus where its payments are sent.
 |---|---|
 | `gmail` | Inbox that receives the bank emails |
 | `banks` | Which banks notify this inbox: `["CAKE"]`, `["TIMO"]` or both (default both). Emails from other banks reaching this inbox are ignored, so each bank can use a different Gmail |
-| `source` | `apps_script`, `imap` (self-host only) or `gmail_oauth` (if enabled) |
+| `source` | `imap` (self-host only), `gmail_oauth`, `forwarding` (each if enabled on the server) or `apps_script` |
+| `forwardingAddress` | For `forwarding`: the address to forward bank mail to (Gmail → Settings → Forwarding) |
 | `orderPrefix` | 1–16 letters or digits, stored upper case (default `PMH`) |
 | `webhookUrl` | `https://` URL on port 443 with a public host name, or `null` |
 | `lastIngestAt` | Last time a bank email was received |

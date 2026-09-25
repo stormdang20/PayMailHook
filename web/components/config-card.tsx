@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { toast } from 'sonner';
 import { BANK_NAMES, type BankCode, BankPicker, formBanks } from '@/components/bank-picker';
 import { ConfirmButton } from '@/components/confirm-button';
+import { ForwardingSetup } from '@/components/forwarding-setup';
 import type { Secret } from '@/components/secret-dialog';
 import { ShareButton } from '@/components/share-button';
 import { Badge } from '@/components/ui/badge';
@@ -144,7 +145,14 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
           </ConfirmButton>
         </CardAction>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {config.forwardingAddress && (
+          <ForwardingSetup
+            address={config.forwardingAddress}
+            confirmation={config.forwardingConfirmation}
+            connected={Boolean(config.lastIngestAt)}
+          />
+        )}
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[12rem_1fr_8rem_auto] sm:items-end">
           <BankPicker id={`banks-${config.id}`} defaultValue={config.banks} />
           <div className="space-y-1.5">

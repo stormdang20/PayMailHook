@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import { sha256Hex } from '../core/crypto';
 import { emailConfigs, user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
+import { inboundSignature, receiveForwarded } from '../core/forwarding';
 import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
 import { deliveryRoutes } from './deliveries';
@@ -17,6 +18,14 @@ import { shareRoutes } from './share';
 import { transactionRoutes } from './transactions';
 
 type SessionUser = { id: string; role: string | null };
+/** Constant-time string comparison for signatures. */
+function timingSafeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export type AppEnv = { Variables: { deps: Deps; user: SessionUser } };
 
 export function createApp(makeDeps: (c: Context) => Deps) {
@@ -51,6 +60,7 @@ export function createApp(makeDeps: (c: Context) => Deps) {
           imap: c.var.deps.imapEnabled,
           vapidPublicKey: c.var.deps.vapid?.publicKey ?? null,
           gmailOAuth: Boolean(c.var.deps.gmailPush),
+          forwarding: Boolean(c.var.deps.inbound),
         }),
       )
       .get('/api/me', async (c) => {
@@ -68,6 +78,22 @@ export function createApp(makeDeps: (c: Context) => Deps) {
       .route('/api/push', pushRoutes)
       .route('/api/gmail', gmailRoutes)
       .route('/mcp', mcpRoutes)
+      // Self-host forwarding: the relay Worker (deploy/email-relay) posts each message here, HMAC-signed.
+      .post('/api/inbound', async (c) => {
+        const { deps } = c.var;
+        const secret = deps.inbound?.secret;
+        if (!secret) return c.json({ error: { code: 'not_found' } }, 404);
+        const to = c.req.header('x-inbound-to') ?? '';
+        const raw = new Uint8Array(await c.req.arrayBuffer());
+        const signature = c.req.header('x-inbound-signature') ?? '';
+        if (!timingSafeEqual(signature, await inboundSignature(secret, to, raw))) {
+          return c.json({ error: { code: 'unauthorized' } }, 401);
+        }
+        const result = await receiveForwarded(deps, to, raw);
+        return result.status === 'unknown_recipient'
+          ? c.json({ error: { code: 'unknown_recipient' } }, 404)
+          : c.json({ ok: true, ...result });
+      })
       .post('/api/ingest', async (c) => {
         const { deps } = c.var;
         const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];

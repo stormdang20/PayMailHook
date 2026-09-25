@@ -3,7 +3,8 @@ import { createAuth } from './core/auth';
 import { createDb } from './core/db/client';
 import type { Deps, Trigger } from './core/deps';
 import { dohResolveTxt } from './core/dkim';
-import { gmailPushFrom, parseEnv, vapidFrom } from './core/env';
+import { gmailPushFrom, inboundFrom, parseEnv, vapidFrom } from './core/env';
+import { receiveForwarded } from './core/forwarding';
 import { runMaintenance } from './core/maintenance';
 import { deliver } from './core/webhook';
 
@@ -26,6 +27,7 @@ function makeDeps(bindings: Bindings, waitUntil?: WaitUntil): Deps {
     imapEnabled: false,
     vapid: vapidFrom(env),
     gmailPush: gmailPushFrom(env),
+    inbound: inboundFrom(env),
     appUrl: env.BETTER_AUTH_URL,
     scheduleDelivery: async (id, delaySeconds, trigger = 'scheduled') => {
       await bindings.QUEUE.send({ id, trigger }, { delaySeconds: Math.ceil(delaySeconds) });
@@ -48,6 +50,16 @@ export default {
         msg.retry({ delaySeconds: 60 });
       }
     }
+  },
+  // Forwarding source: Cloudflare Email Routing (catch-all on INBOUND_EMAIL_DOMAIN) delivers here.
+  async email(message, env, ctx) {
+    const raw = new Uint8Array(await new Response(message.raw).arrayBuffer());
+    const result = await receiveForwarded(
+      makeDeps(env, (p) => ctx.waitUntil(p)),
+      message.to,
+      raw,
+    );
+    if (result.status === 'unknown_recipient') message.setReject('Unknown address');
   },
   async scheduled(_event, env) {
     await runMaintenance(makeDeps(env));

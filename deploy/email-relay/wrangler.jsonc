@@ -1,0 +1,8 @@
+{
+  "name": "paymailhook-email-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  // Secrets: `wrangler secret put PAYMAILHOOK_URL` (https://pay.example.com) and
+  // `wrangler secret put INBOUND_WEBHOOK_SECRET` (same value as the server's .env).
+  "observability": { "enabled": true }
+}

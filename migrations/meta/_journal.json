@@ -50,6 +50,13 @@
       "when": 1790310716748,
       "tag": "0006_youthful_wendell_rand",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790323369544,
+      "tag": "0007_striped_impossible_man",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,9 @@ import type { DKIMResult } from 'mailauth';
 import { dkimVerify } from 'mailauth/lib/dkim/verify';
 import type { Bank } from './banks';
 
+/** Whose signature to trust: a bank, or e.g. Google for Gmail's forwarding confirmation. */
+type Signer = Pick<Bank, 'dkimDomain' | 'gmailAddsDate'>;
+
 export type ResolveTxt = (name: string, rrtype: string) => Promise<string[][]>;
 
 /** Fields mailauth returns at runtime but leaves out of its DKIMResult type. */
@@ -9,7 +12,7 @@ type VerifiedSignature = DKIMResult & { signingHeaders?: { keys: string }; canon
 
 const REQUIRED_SIGNED = ['from', 'to'];
 
-async function hasTrustedSignature(raw: Uint8Array, bank: Bank, resolver: ResolveTxt) {
+async function hasTrustedSignature(raw: Uint8Array, bank: Signer, resolver: ResolveTxt) {
   const verified = await dkimVerify(Buffer.from(raw), { resolver });
   // A verifier checks only the bottom-most copy of a header, while parsers read the top one.
   // An extra unsigned To/From would keep the signature valid but change what ingest sees.
@@ -38,7 +41,7 @@ function stripDateHeader(raw: Uint8Array) {
   return new Uint8Array(Buffer.from(head + s.slice(split + 2), 'latin1'));
 }
 
-export async function verifyBankDkim(raw: Uint8Array, bank: Bank, resolver: ResolveTxt) {
+export async function verifyBankDkim(raw: Uint8Array, bank: Signer, resolver: ResolveTxt) {
   if (await hasTrustedSignature(raw, bank, resolver)) return true;
   return bank.gmailAddsDate === true && hasTrustedSignature(stripDateHeader(raw), bank, resolver);
 }

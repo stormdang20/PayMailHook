@@ -21,6 +21,7 @@ type EmailOptions = {
   domain: string;
   withDate?: boolean;
   maxBodyLength?: number;
+  subject?: string;
 };
 
 const bytes = (s: string) => new Uint8Array(Buffer.from(s, 'latin1'));
@@ -29,7 +30,7 @@ function unsignedMessage(o: EmailOptions) {
   const headers = [
     `From: <${o.from}>`,
     `To: ${o.to}`,
-    'Subject: test',
+    `Subject: ${o.subject ?? 'test'}`,
     `Message-ID: <${crypto.randomUUID()}@test>`,
     ...(o.withDate === false ? [] : [`Date: ${new Date().toUTCString()}`]),
     'MIME-Version: 1.0',
