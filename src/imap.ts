@@ -24,14 +24,25 @@ const gmail: MakeClient = (user, pass) =>
     maxIdleTime: 25 * 60_000, // Gmail drops IDLE after ~29 minutes
   });
 
-/** Ingests bank mail from the last day not yet handled in this session; a failed email is retried next scan. */
+/**
+ * Ingests bank mail from the last day not yet handled in this session; a failed email is retried next scan.
+ * Mail that reached Gmail before `connectedAt` (when the user added this Gmail) is skipped: connecting an
+ * inbox shouldn't import its history. Arrival times are read first so skipped mail is never downloaded.
+ */
 export async function scan(
   client: ImapClient,
   seen: Set<number>,
   ingest: (raw: Uint8Array<ArrayBuffer>) => Promise<unknown>,
+  connectedAt = new Date(0),
 ) {
   const uids = (await client.search({ gmraw: QUERY }, { uid: true })) || [];
-  const fresh = uids.filter((uid) => !seen.has(uid));
+  const unseen = uids.filter((uid) => !seen.has(uid));
+  if (unseen.length === 0) return;
+  const fresh: number[] = [];
+  for (const m of await client.fetchAll(unseen, { internalDate: true }, { uid: true })) {
+    if (new Date(m.internalDate ?? 0) >= connectedAt) fresh.push(m.uid);
+    else seen.add(m.uid);
+  }
   if (fresh.length === 0) return;
   for (const message of await client.fetchAll(fresh, { source: true }, { uid: true })) {
     if (!message.source) continue;
@@ -76,7 +87,7 @@ async function session(deps: Deps, config: EmailConfig, client: Connection, seen
       .then(async () => {
         const lock = await client.getMailboxLock(all);
         try {
-          await scan(client, seen, ingest);
+          await scan(client, seen, ingest, config.createdAt);
         } finally {
           lock.release();
         }

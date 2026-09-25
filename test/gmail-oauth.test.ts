@@ -21,10 +21,12 @@ let close: () => Promise<void>;
 let calls: string[];
 let staleHistory: boolean;
 let bankRaw: string;
+let receivedAt: number | undefined;
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
   calls = [];
   staleHistory = false;
+  receivedAt = undefined;
   const html = await Bun.file('test/fixtures/cake/2.html').text();
   const raw = await signedEmail({ from: 'no-reply@cake.vn', to: 'owner@gmail.com', html, domain: 'cake.vn' });
   bankRaw = raw.toBase64({ alphabet: 'base64url', omitPadding: true });
@@ -49,8 +51,12 @@ const gmailApi = (async (url: string, init?: RequestInit) => {
         });
   if (path === '/messages') return json({ messages: [{ id: 'm1' }] });
   const from = path === '/messages/m1' ? 'CAKE <no-reply@cake.vn>' : 'Shop <news@shop.test>';
-  if (u.searchParams.get('format') === 'metadata')
-    return json({ payload: { headers: [{ name: 'From', value: from }] } });
+  if (u.searchParams.get('format') === 'metadata') {
+    return json({
+      internalDate: String(receivedAt ?? Date.now()),
+      payload: { headers: [{ name: 'From', value: from }] },
+    });
+  }
   if (path === '/messages/m1') return json({ raw: bankRaw });
   return json({ error: 'unexpected' }, 500);
 }) as typeof fetch;
@@ -112,6 +118,17 @@ test('an expired history id falls back to the last day of bank mail', async () =
   await syncGmail(deps, await reload(config.id));
   expect(await db.$count(transactions)).toBe(1);
   expect((await reload(config.id)).gmailHistoryId).toBe('900');
+});
+
+test('the fallback scan skips bank mail that reached Gmail before the Gmail was connected', async () => {
+  const { config, deps } = await setup();
+  await connectGmail(deps, config);
+  staleHistory = true;
+  receivedAt = Date.now() - 86_400_000; // yesterday, before this config existed
+  const { syncGmail } = await import('../src/core/gmail-oauth');
+  await syncGmail(deps, await reload(config.id));
+  expect(await db.$count(transactions)).toBe(0);
+  expect(calls).not.toContain('GET /messages/m1?format=raw');
 });
 
 test('the hourly job renews watches that expire within a day, keeping the history id', async () => {

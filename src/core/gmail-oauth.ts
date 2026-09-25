@@ -112,11 +112,13 @@ async function recentBankMail(deps: Deps, token: string) {
 }
 
 async function ingestMessage(deps: Deps, token: string, config: EmailConfig, id: string) {
-  const meta = await gmail<{ payload?: { headers?: { name: string; value: string }[] } }>(
+  const meta = await gmail<{ internalDate?: string; payload?: { headers?: { name: string; value: string }[] } }>(
     deps,
     token,
     `/messages/${id}?format=metadata&metadataHeaders=From`,
   );
+  // Mail that reached Gmail before this config existed is history, not a new payment (e.g. the 1-day fallback).
+  if (Number(meta.internalDate ?? Date.now()) < config.createdAt.getTime()) return;
   const from = meta.payload?.headers?.find((h) => h.name.toLowerCase() === 'from')?.value ?? '';
   if (!bankForSender(from.match(/<([^>]+)>/)?.[1] ?? from.trim())) return; // only bank mail is downloaded
   const { raw } = await gmail<{ raw: string }>(deps, token, `/messages/${id}?format=raw`);
