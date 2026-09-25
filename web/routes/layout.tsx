@@ -10,6 +10,7 @@ import {
   Webhook,
 } from 'lucide-react';
 import { Navigate, NavLink, Outlet } from 'react-router';
+import { AccountDialog } from '@/components/account-dialog';
 import { Logo } from '@/components/logo';
 import { PushToggle } from '@/components/push-toggle';
 import { Button } from '@/components/ui/button';
@@ -58,15 +59,19 @@ export function Layout() {
       <aside className="border-b bg-sidebar md:sticky md:top-0 md:flex md:h-svh md:flex-col md:border-r md:border-b-0">
         <div className="flex h-14 items-center justify-between px-4 md:h-16">
           <Logo />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            aria-label="Đăng xuất"
-            onClick={() => authClient.signOut()}
-          >
-            <LogOut />
-          </Button>
+          <div className="flex items-center gap-1 md:hidden">
+            <AccountDialog user={session.user} />
+            <PushToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Đăng xuất"
+              title="Đăng xuất"
+              onClick={() => authClient.signOut()}
+            >
+              <LogOut />
+            </Button>
+          </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:flex-1 md:flex-col md:overflow-visible md:pb-0">
           {items.map((item) => (
@@ -74,10 +79,8 @@ export function Layout() {
           ))}
         </nav>
         <div className="hidden space-y-2 border-t p-3 md:block">
-          <p className="truncate px-1 text-muted-foreground text-xs" title={session.user.email}>
-            {session.user.email}
-          </p>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <AccountDialog user={session.user} />
             <PushToggle />
             <Button
               variant="ghost"

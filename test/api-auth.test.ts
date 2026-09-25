@@ -110,3 +110,36 @@ test('sign up with a username, then sign in with either the username or the emai
   const taken = await post('sign-up/email', { email: 'other@test.dev', password, name: 'x', username: 'shop_owner' });
   expect(taken.status).toBe(400);
 });
+
+test('change password: the new one works, the old one and other sessions stop working', async () => {
+  const { cookie } = await signUp('change@test.dev');
+  const secondDevice = await (
+    await app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ORIGIN },
+      body: JSON.stringify({ email: 'change@test.dev', password: 'correct-horse-battery' }),
+    })
+  ).headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0])
+    .join('; ');
+  const res = await app.request('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: ORIGIN, cookie },
+    body: JSON.stringify({
+      currentPassword: 'correct-horse-battery',
+      newPassword: 'a-brand-new-password',
+      revokeOtherSessions: true,
+    }),
+  });
+  expect(res.status).toBe(200);
+  const signIn = (password: string) =>
+    app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ORIGIN },
+      body: JSON.stringify({ email: 'change@test.dev', password }),
+    });
+  expect((await signIn('a-brand-new-password')).status).toBe(200);
+  expect((await signIn('correct-horse-battery')).status).toBe(401);
+  expect((await app.request('/api/me', { headers: { cookie: secondDevice } })).status).toBe(401);
+});
