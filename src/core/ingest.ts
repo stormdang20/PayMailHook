@@ -92,7 +92,8 @@ export async function ingestRawEmail(
   if (raw.byteLength > MAX_RAW_BYTES) return { status: 'rejected', reason: 'too_large' };
   const email = await PostalMime.parse(raw);
   const bank = bankForSender(email.from?.address);
-  if (!bank) return { status: 'ignored' };
+  // Unknown senders, and banks this Gmail isn't set up for (another Gmail may handle them).
+  if (!bank || !config.banks.includes(bank.code)) return { status: 'ignored' };
   const messageId = email.messageId;
   if (!messageId) return reject(deps, config, raw, 'malformed');
   const owner = normalizeEmail(config.gmail);

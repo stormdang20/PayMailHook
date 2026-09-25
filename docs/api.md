@@ -148,6 +148,7 @@ A config is one Gmail inbox plus where its payments are sent.
 | Field | Description |
 |---|---|
 | `gmail` | Inbox that receives the bank emails |
+| `banks` | Which banks notify this inbox: `["CAKE"]`, `["TIMO"]` or both (default both). Emails from other banks reaching this inbox are ignored, so each bank can use a different Gmail |
 | `source` | `apps_script`, `imap` (self-host only) or `gmail_oauth` (if enabled) |
 | `orderPrefix` | 1–16 letters or digits, stored upper case (default `PMH`) |
 | `webhookUrl` | `https://` URL on port 443 with a public host name, or `null` |
@@ -161,14 +162,14 @@ List or read configs. Secrets are never returned.
 #### `POST /email-configs`
 
 ```json
-{ "gmail": "shop@gmail.com", "webhookUrl": "https://shop.example.com/webhooks/paymailhook", "orderPrefix": "PMH" }
+{ "gmail": "shop@gmail.com", "banks": ["CAKE"], "webhookUrl": "https://shop.example.com/webhooks/paymailhook", "orderPrefix": "PMH" }
 ```
 
 For `"source": "imap"` also send `"imapPassword"` (a 16-letter Google App Password). Answers `201` with the config and, **once only**, `ingestToken`, `webhookSecret` (`whsec_…`) and `appsScript` (the `Code.gs` to paste into Google Apps Script; `null` for other sources). Store the webhook secret right away.
 
 #### `PATCH /email-configs/{id}`
 
-Any of `webhookUrl` (or `null`), `orderPrefix`, `imapPassword`. The Gmail address can't change; delete and recreate the config instead.
+Any of `webhookUrl` (or `null`), `orderPrefix`, `banks` (at least one), `imapPassword`. The Gmail address can't change; delete and recreate the config instead.
 
 #### `DELETE /email-configs/{id}`
 

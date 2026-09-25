@@ -3,6 +3,7 @@ import { Mailbox } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { type BankCode, BankPicker, formBanks } from '@/components/bank-picker';
 import { ConfigCard } from '@/components/config-card';
 import { EmptyState } from '@/components/empty-state';
 import { OrderCode } from '@/components/order-code';
@@ -59,8 +60,13 @@ export function ConfigsPage() {
   const { data: server } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
   const list = useQuery({ queryKey: ['email-configs'], queryFn: () => parseResponse(configs.$get()) });
   const create = useMutation({
-    mutationFn: (json: { gmail: string; webhookUrl: string | null; source: typeof source; imapPassword?: string }) =>
-      parseResponse(configs.$post({ json })),
+    mutationFn: (json: {
+      gmail: string;
+      webhookUrl: string | null;
+      source: typeof source;
+      banks: BankCode[];
+      imapPassword?: string;
+    }) => parseResponse(configs.$post({ json })),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['email-configs'] });
       if (r.config.source === 'gmail_oauth') {
@@ -94,7 +100,15 @@ export function ConfigsPage() {
     const form = new FormData(e.currentTarget);
     const webhookUrl = String(form.get('webhookUrl')).trim();
     const imapPassword = source === 'imap' ? String(form.get('imapPassword')) : undefined;
-    create.mutate({ gmail: String(form.get('gmail')).trim(), webhookUrl: webhookUrl || null, source, imapPassword });
+    const banks = formBanks(form);
+    if (banks.length === 0) return toast.error('Chọn ít nhất một ngân hàng gửi thông báo tới Gmail này.');
+    create.mutate({
+      gmail: String(form.get('gmail')).trim(),
+      webhookUrl: webhookUrl || null,
+      source,
+      banks,
+      imapPassword,
+    });
     e.currentTarget.reset();
   }
 
@@ -114,6 +128,9 @@ export function ConfigsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div className="sm:col-span-3">
+              <BankPicker />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="gmail">Gmail</Label>
               <Input id="gmail" name="gmail" type="email" required placeholder="shop@gmail.com" />

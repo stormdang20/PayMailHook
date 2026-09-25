@@ -13,6 +13,7 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
   await page.getByRole('button', { name: 'Đăng ký' }).click();
   await expect(page.getByRole('heading', { name: 'Kết nối' })).toBeVisible();
 
+  await page.getByLabel('CAKE by VPBank').check();
   await page.getByLabel('Gmail').fill(gmail);
   await page.getByLabel('URL webhook (không bắt buộc)').fill('http://localhost:4455/__e2e/hook');
   await page.getByRole('button', { name: 'Thêm' }).click();

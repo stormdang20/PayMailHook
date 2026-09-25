@@ -40,6 +40,8 @@ export const emailConfigs = pgTable(
     lastIngestAt: tz('last_ingest_at'),
     ingestError: text('ingest_error'),
     orderPrefix: text('order_prefix').notNull().default('PMH'),
+    /** Banks whose notifications this Gmail receives; other banks' emails are ignored. */
+    banks: bank('banks').array().notNull().default(sql`'{CAKE,TIMO}'`),
     webhookUrl: text('webhook_url'),
     webhookSecretEnc: text('webhook_secret_enc'),
     /** Public read-only link to this config's incoming transactions (cashier screen); null = not shared. */

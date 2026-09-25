@@ -1,0 +1,1 @@
+ALTER TABLE "email_configs" ADD COLUMN "banks" "bank"[] DEFAULT '{CAKE,TIMO}' NOT NULL;

@@ -16,6 +16,7 @@ const publicColumns = {
   gmail: emailConfigs.gmail,
   source: emailConfigs.source,
   orderPrefix: emailConfigs.orderPrefix,
+  banks: emailConfigs.banks,
   webhookUrl: emailConfigs.webhookUrl,
   lastIngestAt: emailConfigs.lastIngestAt,
   ingestError: emailConfigs.ingestError,
@@ -36,6 +37,11 @@ const imapPassword = z
   .string()
   .transform((s) => s.replace(/\s/g, ''))
   .pipe(z.string().regex(/^[A-Za-z]{16}$/, 'App Password is 16 letters'));
+// Which banks' notifications this Gmail receives; a set of the banks PayMailHook reads.
+const banks = z
+  .array(z.enum(['CAKE', 'TIMO']))
+  .min(1)
+  .transform((list) => [...new Set(list)].sort());
 const idParam = validate('param', z.object({ id: z.uuid() }));
 
 const owned = (userId: string, id: string) => and(eq(emailConfigs.id, id), eq(emailConfigs.userId, userId));
@@ -77,6 +83,7 @@ export const emailConfigRoutes = new Hono<AppEnv>()
           gmail: z.email().transform((s) => s.trim().toLowerCase()),
           webhookUrl: webhookUrl.optional(),
           orderPrefix: orderPrefix.optional(),
+          banks: banks.optional(),
           source: z.enum(['apps_script', 'imap', 'gmail_oauth']).default('apps_script'),
           imapPassword: imapPassword.optional(),
         })
@@ -123,6 +130,7 @@ export const emailConfigRoutes = new Hono<AppEnv>()
       z.object({
         webhookUrl: webhookUrl.optional(),
         orderPrefix: orderPrefix.optional(),
+        banks: banks.optional(),
         imapPassword: imapPassword.optional(),
       }),
     ),

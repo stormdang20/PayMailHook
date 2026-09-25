@@ -834,3 +834,10 @@ Link to Google's 2-Step Verification in the IMAP form (App Passwords need it; th
 - **Cause:** `session()` took `getMailboxLock()` at connect and held it for the whole connection. imapflow treats a held lock as "busy" (`connectionBusy()` in `imap-flow.js`) and never starts auto-IDLE, so Gmail never pushed `EXISTS`; new mail only surfaced with imapflow's periodic keepalive NOOP (about every 5 minutes) or a restart. The earlier transfers were processed exactly 5 minutes apart.
 - **Fix:** select the mailbox with `mailboxOpen()` and take the lock only around each scan. After 15 s of inactivity imapflow starts IDLE and Gmail pushes new mail immediately.
 - **Checked:** unit test (the lock count is 0 between scans; failed before the fix) and against real Gmail: lock held for the session → `idling: false` after 18 s; lock only during the scan → `idling: true`.
+
+## Banks per Gmail (2026-09-25)
+
+- **Request:** let users say which bank notifies each Gmail (CAKE to one inbox, Timo to another).
+- **Done:** `email_configs.banks bank[] NOT NULL DEFAULT '{CAKE,TIMO}'` (migration `0006`; existing configs keep both). API `POST`/`PATCH` accept `banks` (at least one of `CAKE`/`TIMO`, deduplicated); responses include it. Ingest answers `ignored` for a bank the config isn't set up for, so another config can own that bank's mail. UI: a bank checkbox group at the top of the add form and on each card, plus bank badges on the card.
+- **Filtering stays server-side:** Apps Script, IMAP and Gmail OAuth still look for every supported sender. Baking the selection into `Code.gs` would silently miss a bank added later until the user re-pasted the script; with server-side filtering a change applies immediately.
+- Tests: ingest ignores an unselected bank; API defaults to both, stores a choice, edits it, rejects `[]` and unknown banks. E2E ticks CAKE.

@@ -43,6 +43,13 @@
       "when": 1790262371580,
       "tag": "0005_clever_jazinda",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790310716748,
+      "tag": "0006_youthful_wendell_rand",
+      "breakpoints": true
     }
   ]
 }

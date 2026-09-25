@@ -110,3 +110,10 @@ test('a Gmail already claimed by another config is rejected as to_mismatch', asy
   const [mine] = await db.select().from(emailConfigs).where(eq(emailConfigs.id, config.id));
   expect(mine.lastIngestAt).toBeNull();
 });
+
+test("a bank this Gmail isn't set up for is ignored", async () => {
+  const config = await seedConfig(db, { banks: ['TIMO'] });
+  const result = await ingestRawEmail(makeDeps(db).deps, config, await cake());
+  expect(result).toEqual({ status: 'ignored' });
+  expect(await db.$count(transactions)).toBe(0);
+});

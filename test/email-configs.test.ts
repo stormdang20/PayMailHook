@@ -127,3 +127,14 @@ test('invalid bodies are 400 validation errors; delete removes the config', asyn
   expect(await json(await call(app, cookie, 'GET', '/api/email-configs'))).toEqual([]);
   expect((await call(app, cookie, 'GET', '/api/email-configs/not-a-uuid')).status).toBe(400);
 });
+
+test('banks: both by default, chosen on create, editable, never empty', async () => {
+  const { cookie } = await signUp(app, db);
+  expect((await create(cookie)).body.config.banks).toEqual(['CAKE', 'TIMO']);
+  const { body } = await create(cookie, { gmail: 'timo.only@gmail.com', banks: ['TIMO'] });
+  expect(body.config.banks).toEqual(['TIMO']);
+  const patch = (b: unknown) => call(app, cookie, 'PATCH', `/api/email-configs/${body.config.id}`, b);
+  expect(await json(await patch({ banks: ['CAKE'] }))).toMatchObject({ banks: ['CAKE'] });
+  expect((await patch({ banks: [] })).status).toBe(400);
+  expect((await create(cookie, { gmail: 'x@gmail.com', banks: ['VCB'] })).res.status).toBe(400);
+});

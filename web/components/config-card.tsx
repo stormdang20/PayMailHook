@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { InferResponseType } from 'hono/client';
 import type { FormEvent } from 'react';
 import { toast } from 'sonner';
+import { BANK_NAMES, type BankCode, BankPicker, formBanks } from '@/components/bank-picker';
 import { ConfirmButton } from '@/components/confirm-button';
 import type { Secret } from '@/components/secret-dialog';
 import { ShareButton } from '@/components/share-button';
@@ -32,7 +33,7 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
   const onError = (e: unknown) => toast.error(errorMessage(e));
 
   const save = useMutation({
-    mutationFn: (json: { webhookUrl: string | null; orderPrefix: string; imapPassword?: string }) =>
+    mutationFn: (json: { webhookUrl: string | null; orderPrefix: string; banks: BankCode[]; imapPassword?: string }) =>
       parseResponse(byId.$patch({ param, json })),
     onSuccess: () => {
       toast.success('Đã lưu');
@@ -73,7 +74,10 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
     const form = new FormData(e.currentTarget);
     const webhookUrl = String(form.get('webhookUrl')).trim();
     const imapPassword = String(form.get('imapPassword') ?? '').trim();
+    const banks = formBanks(form);
+    if (banks.length === 0) return toast.error('Chọn ít nhất một ngân hàng.');
     save.mutate({
+      banks,
       webhookUrl: webhookUrl || null,
       orderPrefix: String(form.get('orderPrefix')).trim(),
       ...(imapPassword && { imapPassword }),
@@ -85,7 +89,14 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
       <CardHeader>
         <CardTitle>{config.gmail}</CardTitle>
         <CardDescription>
-          <Status config={config} />
+          <span className="flex flex-wrap items-center gap-2">
+            <Status config={config} />
+            {config.banks.map((b) => (
+              <Badge key={b} variant="outline">
+                {BANK_NAMES[b]}
+              </Badge>
+            ))}
+          </span>
         </CardDescription>
         <CardAction className="flex gap-2">
           {config.source === 'gmail_oauth' && !config.gmailConnected && (
@@ -136,6 +147,9 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[1fr_8rem_auto] sm:items-end">
+          <div className="sm:col-span-3">
+            <BankPicker defaultValue={config.banks} />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor={`url-${config.id}`}>URL webhook</Label>
             <Input
