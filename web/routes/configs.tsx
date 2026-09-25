@@ -101,7 +101,6 @@ export function ConfigsPage() {
     const webhookUrl = String(form.get('webhookUrl')).trim();
     const imapPassword = source === 'imap' ? String(form.get('imapPassword')) : undefined;
     const banks = formBanks(form);
-    if (banks.length === 0) return toast.error('Chọn ít nhất một ngân hàng gửi thông báo tới Gmail này.');
     create.mutate({
       gmail: String(form.get('gmail')).trim(),
       webhookUrl: webhookUrl || null,
@@ -127,10 +126,8 @@ export function ConfigsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <div className="sm:col-span-3">
-              <BankPicker />
-            </div>
+          <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[12rem_1fr_1fr_auto] sm:items-end">
+            <BankPicker />
             <div className="space-y-1.5">
               <Label htmlFor="gmail">Gmail</Label>
               <Input id="gmail" name="gmail" type="email" required placeholder="shop@gmail.com" />
@@ -142,7 +139,7 @@ export function ConfigsPage() {
             <Button type="submit" disabled={create.isPending}>
               Thêm
             </Button>
-            <p className="text-muted-foreground text-xs sm:col-span-3">
+            <p className="text-muted-foreground text-xs sm:col-span-4">
               URL webhook là địa chỉ trên website hoặc hệ thống của bạn, nơi PayMailHook gửi thông báo khi một đơn được
               thanh toán (bạn tự cung cấp, ví dụ https://shop.vn/webhooks/paymailhook). Chưa có hệ thống riêng thì để
               trống: bạn vẫn xem giao dịch và nhận thông báo trên dashboard.{' '}

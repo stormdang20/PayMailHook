@@ -13,7 +13,6 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
   await page.getByRole('button', { name: 'Đăng ký' }).click();
   await expect(page.getByRole('heading', { name: 'Kết nối' })).toBeVisible();
 
-  await page.getByLabel('CAKE by VPBank').check();
   await page.getByLabel('Gmail').fill(gmail);
   await page.getByLabel('URL webhook (không bắt buộc)').fill('http://localhost:4455/__e2e/hook');
   await page.getByRole('button', { name: 'Thêm' }).click();
@@ -40,4 +39,13 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
     await page.reload();
     await expect(page.getByRole('row').filter({ hasText: '123456' })).toContainText('Thành công', { timeout: 1000 });
   }).toPass({ timeout: 15_000 });
+
+  // The bank drop-down really submits a single bank (Radix renders a hidden native select for forms).
+  await page.getByRole('link', { name: 'Kết nối' }).click();
+  await page.getByRole('combobox', { name: 'Ngân hàng' }).nth(1).click();
+  await page.getByRole('option', { name: 'Timo' }).click();
+  await page.getByRole('button', { name: 'Lưu' }).click();
+  await expect(page.getByText('Đã lưu')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Ngân hàng' }).nth(1)).toHaveText('Timo');
 });

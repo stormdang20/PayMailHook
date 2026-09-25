@@ -75,7 +75,6 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
     const webhookUrl = String(form.get('webhookUrl')).trim();
     const imapPassword = String(form.get('imapPassword') ?? '').trim();
     const banks = formBanks(form);
-    if (banks.length === 0) return toast.error('Chọn ít nhất một ngân hàng.');
     save.mutate({
       banks,
       webhookUrl: webhookUrl || null,
@@ -146,10 +145,8 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
         </CardAction>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[1fr_8rem_auto] sm:items-end">
-          <div className="sm:col-span-3">
-            <BankPicker defaultValue={config.banks} />
-          </div>
+        <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[12rem_1fr_8rem_auto] sm:items-end">
+          <BankPicker id={`banks-${config.id}`} defaultValue={config.banks} />
           <div className="space-y-1.5">
             <Label htmlFor={`url-${config.id}`}>URL webhook</Label>
             <Input
@@ -167,7 +164,7 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
             Lưu
           </Button>
           {config.source === 'imap' && (
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-1.5 sm:col-span-3">
               <Label htmlFor={`imap-${config.id}`}>App Password mới (để trống nếu không đổi)</Label>
               <Input
                 id={`imap-${config.id}`}
