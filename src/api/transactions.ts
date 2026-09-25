@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, isNotNull, lt, lte, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { transactions } from '../core/db/schema';
@@ -26,6 +26,24 @@ const columns = {
 };
 
 const byTime = keyset(transactions.occurredAt, transactions.id);
+
+/** A calendar day as the shop sees it: YYYY-MM-DD in Vietnam time. */
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
+const vnDayStart = (date: string, plusDays = 0) => {
+  const start = new Date(`${date}T00:00:00+07:00`);
+  start.setUTCDate(start.getUTCDate() + plusDays);
+  return start;
+};
+
+/** Case-insensitive "contains" over description, order code and payer name; the user's % and _ are literal. */
+const textMatch = (text: string) => {
+  const pattern = `%${text.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  return or(
+    ilike(transactions.description, pattern),
+    ilike(transactions.orderId, pattern),
+    ilike(transactions.counterpartyName, pattern),
+  );
+};
 const idParam = validate('param', z.object({ id: z.uuid() }));
 const notFound = { error: { code: 'not_found' } };
 
@@ -41,6 +59,12 @@ export const transactionRoutes = new Hono<AppEnv>()
         direction: z.enum(['in', 'out']).optional(),
         // Only transactions whose description carried an order code (the ones that trigger webhooks).
         hasOrder: z.literal('true').optional(),
+        bank: z.enum(['CAKE', 'TIMO']).optional(),
+        from: day.optional(),
+        to: day.optional(),
+        q: z.string().trim().min(1).max(100).optional(),
+        minAmount: z.coerce.number().int().nonnegative().optional(),
+        maxAmount: z.coerce.number().int().nonnegative().optional(),
       }),
     ),
     async (c) => {
@@ -55,6 +79,12 @@ export const transactionRoutes = new Hono<AppEnv>()
             q.orderId ? eq(transactions.orderId, q.orderId.toUpperCase()) : undefined,
             q.direction ? eq(transactions.direction, q.direction) : undefined,
             q.hasOrder ? isNotNull(transactions.orderId) : undefined,
+            q.bank ? eq(transactions.bank, q.bank) : undefined,
+            q.from ? gte(transactions.occurredAt, vnDayStart(q.from)) : undefined,
+            q.to ? lt(transactions.occurredAt, vnDayStart(q.to, 1)) : undefined,
+            q.minAmount !== undefined ? gte(transactions.amount, q.minAmount) : undefined,
+            q.maxAmount !== undefined ? lte(transactions.amount, q.maxAmount) : undefined,
+            q.q ? textMatch(q.q) : undefined,
             byTime.before(q.cursor),
           ),
         )

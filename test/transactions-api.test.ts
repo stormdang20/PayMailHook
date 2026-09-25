@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../src/api/app';
 import type { Database } from '../src/core/db/client';
 import { emailConfigs } from '../src/core/db/schema';
-import { createTestDb } from './db';
+import { createTestDb, seedConfig } from './db';
 import { makeDeps } from './deps';
 import { call, json, signUp } from './http';
 import { seedDelivery, seedTransaction } from './seed';
@@ -102,4 +102,39 @@ test('hasOrder=true keeps only transactions carrying an order code', async () =>
   const page = await json(await call(app, cookie, 'GET', '/api/transactions?hasOrder=true'));
   expect(page.items.map((t: { id: string }) => t.id)).toEqual([paid.id]);
   expect((await json(await call(app, cookie, 'GET', '/api/transactions'))).items).toHaveLength(2);
+});
+
+test('filters by Vietnam date range, bank, gmail, text and amount', async () => {
+  const { cookie, config } = await owner();
+  const other = await seedConfig(db, { userId: config.userId, gmail: 'timo.inbox@gmail.com' });
+  const t = (o: Parameters<typeof seedTransaction>[2], c = config) => seedTransaction(db, c, o);
+  // 24/09 23:30 and 25/09 00:30 in Vietnam time (UTC+7).
+  const lateNight = await t({
+    occurredAt: new Date('2026-09-24T16:30:00Z'),
+    amount: 50_000,
+    description: 'Tien an trua 50%',
+  });
+  const nextDay = await t({
+    occurredAt: new Date('2026-09-24T17:30:00Z'),
+    amount: 149_000,
+    description: 'PMH777 thanh toan',
+    orderId: '777',
+  });
+  const timo = await t(
+    { bank: 'TIMO', occurredAt: new Date('2026-09-25T03:00:00Z'), amount: 2_000_000, counterpartyName: 'TRAN THI B' },
+    other,
+  );
+  const ids = async (query: string) =>
+    (await json(await call(app, cookie, 'GET', `/api/transactions?${query}`))).items
+      .map((x: { id: string }) => x.id)
+      .sort();
+  expect(await ids('from=2026-09-25')).toEqual([nextDay.id, timo.id].sort());
+  expect(await ids('to=2026-09-24')).toEqual([lateNight.id]);
+  expect(await ids('from=2026-09-25&to=2026-09-25&bank=TIMO')).toEqual([timo.id]);
+  expect(await ids(`configId=${other.id}`)).toEqual([timo.id]);
+  expect(await ids('q=pmh777')).toEqual([nextDay.id]);
+  expect(await ids('q=tran%20thi')).toEqual([timo.id]); // payer name
+  expect(await ids('q=50%25')).toEqual([lateNight.id]); // a literal %, not a wildcard
+  expect(await ids('minAmount=100000&maxAmount=1000000')).toEqual([nextDay.id]);
+  expect((await call(app, cookie, 'GET', '/api/transactions?from=25-09-2026')).status).toBe(400);
 });

@@ -76,6 +76,11 @@ Base URL: `https://<your-paymailhook>/api`. Every endpoint below needs an API ke
 | `orderId` | string | Only transactions with this order code |
 | `direction` | `in` \| `out` | Money received or sent |
 | `configId` | uuid | Only this email config |
+| `bank` | `CAKE` \| `TIMO` | Only this bank |
+| `from`, `to` | `YYYY-MM-DD` | Vietnam calendar days, both inclusive |
+| `q` | string | Contains, case-insensitive, in the description, order code or payer name |
+| `minAmount`, `maxAmount` | integer | Amount range in VND, inclusive |
+| `hasOrder` | `true` | Only transactions whose description carried an order code |
 | `cursor`, `limit` | | See [Pagination](#pagination) |
 
 ```bash

@@ -1,37 +1,32 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { ReceiptText } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ReceiptText, SearchX } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { OrderCode } from '@/components/order-code';
 import { PageHeader } from '@/components/page-header';
 import { ShareButton } from '@/components/share-button';
+import { TransactionFilters, useTransactionFilters } from '@/components/transaction-filters';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, parseResponse } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import { formatTime, formatVnd } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-type Direction = 'all' | 'in' | 'out';
-
 export function TransactionsPage() {
-  const [direction, setDirection] = useState<Direction>('all');
-  const [orders, setOrders] = useState<'all' | 'with'>('all');
-  const filter = `${direction}:${orders}`;
+  const filterState = useTransactionFilters();
+  const { filters } = filterState;
+  const filter = JSON.stringify(filters);
   const queryClient = useQueryClient();
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['transactions'] });
   const pages = useInfiniteQuery({
-    queryKey: ['transactions', direction, orders],
+    queryKey: ['transactions', filters],
     initialPageParam: '',
     queryFn: ({ pageParam }) =>
       parseResponse(
         api.transactions.$get({
-          query: {
-            ...(pageParam && { cursor: pageParam }),
-            ...(direction !== 'all' && { direction }),
-            ...(orders === 'with' && { hasOrder: 'true' as const }),
-          },
+          // Values come from the URL; the API validates them (a bad date is a 400).
+          query: { ...(filters as Record<string, string>), ...(pageParam && { cursor: pageParam }) },
         }),
       ),
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -56,38 +51,24 @@ export function TransactionsPage() {
         title="Giao dịch"
         description="Mọi biến động số dư đọc được từ email ngân hàng, tự cập nhật mỗi 5 giây."
         actions={
-          <>
-            <span className="flex items-center gap-2 text-muted-foreground text-xs">
-              <span className="size-2 animate-live rounded-full bg-primary motion-reduce:animate-none" />
-              Đang cập nhật
-            </span>
-            <Select value={direction} onValueChange={(v) => setDirection(v as Direction)}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                <SelectItem value="in">Tiền vào</SelectItem>
-                <SelectItem value="out">Tiền ra</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={orders} onValueChange={(v) => setOrders(v as 'all' | 'with')}>
-              <SelectTrigger className="w-44" aria-label="Lọc theo mã đơn">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Mọi giao dịch</SelectItem>
-                <SelectItem value="with">Chỉ có mã đơn</SelectItem>
-              </SelectContent>
-            </Select>
-          </>
+          <span className="flex items-center gap-2 text-muted-foreground text-xs">
+            <span className="size-2 animate-live rounded-full bg-primary motion-reduce:animate-none" />
+            Đang cập nhật
+          </span>
         }
       />
+      <TransactionFilters {...filterState} />
       {pages.error && <p className="mb-4 text-destructive text-sm">{errorMessage(pages.error)}</p>}
       {pages.isSuccess && rows.length === 0 ? (
-        <EmptyState icon={ReceiptText} title="Chưa có giao dịch">
-          Giao dịch xuất hiện ở đây vài giây sau khi ngân hàng gửi email thông báo tới Gmail đã kết nối.
-        </EmptyState>
+        filterState.active ? (
+          <EmptyState icon={SearchX} title="Không có giao dịch khớp bộ lọc">
+            Thử nới khoảng thời gian hoặc bấm Xoá bộ lọc.
+          </EmptyState>
+        ) : (
+          <EmptyState icon={ReceiptText} title="Chưa có giao dịch">
+            Giao dịch xuất hiện ở đây vài giây sau khi ngân hàng gửi email thông báo tới Gmail đã kết nối.
+          </EmptyState>
+        )
       ) : (
         <div className="rounded-lg border bg-card">
           <Table>
