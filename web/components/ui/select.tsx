@@ -44,7 +44,7 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = 'item-aligned',
+  position = 'popper', // always drop down below the trigger instead of centring the list on the selection
   align = 'center',
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {

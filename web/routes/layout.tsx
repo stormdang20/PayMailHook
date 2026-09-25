@@ -48,6 +48,9 @@ function NavItem({ item }: { item: Item }) {
 }
 
 /** Signed-in shell: sidebar on desktop, a scrolling tab bar on phones. Redirects to /sign-in without a session. */
+/** Sign out and land on the product page rather than the sign-in form. */
+const signOut = () => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.assign('/') } });
+
 export function Layout() {
   const { data: session, isPending } = authClient.useSession();
   if (isPending) return null;
@@ -62,13 +65,7 @@ export function Layout() {
           <div className="flex items-center gap-1 md:hidden">
             <AccountDialog user={session.user} />
             <PushToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Đăng xuất"
-              title="Đăng xuất"
-              onClick={() => authClient.signOut()}
-            >
+            <Button variant="ghost" size="icon" aria-label="Đăng xuất" title="Đăng xuất" onClick={signOut}>
               <LogOut />
             </Button>
           </div>
@@ -82,13 +79,7 @@ export function Layout() {
           <div className="flex items-center gap-1">
             <AccountDialog user={session.user} />
             <PushToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Đăng xuất"
-              title="Đăng xuất"
-              onClick={() => authClient.signOut()}
-            >
+            <Button variant="ghost" size="icon" aria-label="Đăng xuất" title="Đăng xuất" onClick={signOut}>
               <LogOut />
             </Button>
           </div>

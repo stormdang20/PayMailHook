@@ -15,14 +15,16 @@ const TEXT = {
     title: 'Đăng nhập',
     lead: 'Xem tiền vào và trạng thái webhook của cửa hàng.',
     submit: 'Đăng nhập',
-    switch: 'Chưa có tài khoản? Đăng ký ngay',
+    question: 'Chưa có tài khoản?',
+    switch: 'Đăng ký ngay',
     to: '/sign-up',
   },
   'sign-up': {
     title: 'Tạo tài khoản',
     lead: 'Tạo tài khoản để kết nối Gmail nhận thông báo ngân hàng.',
     submit: 'Đăng ký',
-    switch: 'Đã có tài khoản? Đăng nhập ngay',
+    question: 'Đã có tài khoản?',
+    switch: 'Đăng nhập ngay',
     to: '/sign-in',
   },
 };
@@ -54,7 +56,9 @@ export function AuthPage({ mode }: { mode: Mode }) {
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-6">
           <div className="space-y-2">
-            <Logo className="lg:hidden" />
+            <Link to="/" aria-label="Về trang chủ" className="inline-block lg:hidden">
+              <Logo />
+            </Link>
             <h1 className="font-semibold text-2xl tracking-tight">{text.title}</h1>
             <p className="text-muted-foreground text-sm">{text.lead}</p>
           </div>
@@ -104,8 +108,9 @@ export function AuthPage({ mode }: { mode: Mode }) {
               </Button>
             </>
           )}
-          <p className="text-center text-sm">
-            <Link to={text.to} className="text-primary hover:underline">
+          <p className="text-center text-muted-foreground text-sm">
+            {text.question}{' '}
+            <Link to={text.to} className="font-medium text-primary hover:underline">
               {text.switch}
             </Link>
           </p>
@@ -124,7 +129,9 @@ export function AuthPage({ mode }: { mode: Mode }) {
 function BrandPanel() {
   return (
     <section className="hidden flex-col bg-primary p-12 text-primary-foreground lg:flex">
-      <Logo className="[&>span>span]:text-highlight" />
+      <Link to="/" aria-label="Về trang chủ" className="self-start">
+        <Logo className="[&>span>span]:text-highlight" />
+      </Link>
       <div className="my-auto max-w-md space-y-8">
         <h2 className="font-semibold text-3xl leading-tight tracking-tight">
           Khách chuyển khoản, đơn hàng tự xác nhận.

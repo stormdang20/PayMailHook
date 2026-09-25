@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Mailbox } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfigCard } from '@/components/config-card';
 import { EmptyState } from '@/components/empty-state';
@@ -125,6 +125,14 @@ export function ConfigsPage() {
             <Button type="submit" disabled={create.isPending}>
               Thêm
             </Button>
+            <p className="text-muted-foreground text-xs sm:col-span-3">
+              URL webhook là địa chỉ trên website hoặc hệ thống của bạn, nơi PayMailHook gửi thông báo khi một đơn được
+              thanh toán (bạn tự cung cấp, ví dụ https://shop.vn/webhooks/paymailhook). Chưa có hệ thống riêng thì để
+              trống: bạn vẫn xem giao dịch và nhận thông báo trên dashboard.{' '}
+              <Link to="/dashboard/docs" className="font-medium text-primary underline">
+                Cách tích hợp
+              </Link>
+            </p>
             {(server?.imap || server?.gmailOAuth) && (
               <div className="space-y-1.5">
                 <Label>Cách nhận email</Label>

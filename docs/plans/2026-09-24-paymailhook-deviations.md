@@ -820,3 +820,10 @@ Link to Google's 2-Step Verification in the IMAP form (App Passwords need it; th
 - **QR:** `/api/qr` and the page accept only CAKE and Timo (derived from `BANKS`): a QR for another bank would send money PayMailHook never sees. The test uses a real bank key (`vietcombank`) to prove the restriction.
 - **Push toggle** is an icon button (`Bell`/`BellOff`, `aria-pressed`, tooltip).
 - **Google sign-in button** still only shows when `GOOGLE_CLIENT_ID/SECRET` are configured; the running instance has none.
+
+## Auth links, selects, QR button, webhook URL help (2026-09-25)
+
+- Sign-in/sign-up: only "Đăng ký ngay" / "Đăng nhập ngay" is a link; "Chưa có tài khoản?" is plain text. The logo on both pages links back to the landing page, and signing out returns to the landing page (`/`) instead of the sign-in form.
+- `Select` defaults to Radix `position="popper"`: lists always drop down below the trigger. The previous `item-aligned` default centred the list on the selected item, so it opened both up and down.
+- QR page: a "Tạo mã QR" submit button builds the image; typing no longer requests a new QR on every keystroke.
+- Webhook URL: the user supplies it (an endpoint on their own system that PayMailHook calls); PayMailHook only issues the `whsec_` secret. The add-Gmail form now says so and that it can stay empty (dashboard, push notifications and share links still work), with a link to the integration docs.
