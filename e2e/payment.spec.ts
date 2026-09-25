@@ -10,7 +10,7 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
   await page.getByLabel('Tên đăng nhập').fill(`owner${Date.now()}`);
   await page.getByLabel('Email').fill(`owner.${Date.now()}@test.dev`);
   await page.getByLabel('Mật khẩu').fill('correct-horse-battery');
-  await page.getByRole('button', { name: 'Đăng ký' }).click();
+  await page.getByRole('button', { name: 'Đăng ký', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Kết nối' })).toBeVisible();
 
   await page.getByLabel('Gmail').fill(gmail);
