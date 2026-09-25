@@ -44,10 +44,15 @@ function Choice({
   options: [string, string][];
 }) {
   return (
-    <div className="grid gap-1.5">
+    // min-w-0 lets a long value (a Gmail address) shrink to the grid column instead of widening it.
+    <div className="grid min-w-0 gap-1.5">
       <Label className="text-muted-foreground text-xs">{label}</Label>
       <Select value={value ?? ALL} onValueChange={(v) => onChange(v === ALL ? undefined : v)}>
-        <SelectTrigger className="w-full" aria-label={label}>
+        <SelectTrigger
+          className="w-full *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
+          aria-label={label}
+          title={options.find(([v]) => v === value)?.[1]}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
