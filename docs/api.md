@@ -47,7 +47,7 @@ Errors use HTTP status codes and a JSON body:
 |---|---|---|
 | 400 | `validation` | The request body or query is invalid; `issues` lists the fields |
 | 400 | `invalid_webhook_url` | The webhook URL is not allowed; `reason` says why (`https_required`, `ip_not_allowed`, `host_not_allowed`, `port_not_allowed`, `credentials_not_allowed`, `invalid_url`) |
-| 401 | `unauthorized` | Missing or invalid API key, session or ingest token |
+| 401 | `unauthorized` | Missing or invalid API key or session |
 | 404 | `not_found` | The resource doesn't exist **or belongs to someone else** |
 | 409 | `not_finished` | A webhook can only be resent after it succeeded or failed |
 | 429 | `rate_limited` | Too many requests; wait the number of seconds in the `Retry-After` header |
@@ -154,7 +154,7 @@ A config is one Gmail inbox plus where its payments are sent.
 |---|---|
 | `gmail` | Inbox that receives the bank emails |
 | `banks` | Which banks notify this inbox: `["CAKE"]`, `["TIMO"]` or both (default both). Emails from other banks reaching this inbox are ignored, so each bank can use a different Gmail |
-| `source` | `imap` (self-host only), `gmail_oauth`, `forwarding` (each if enabled on the server) or `apps_script` |
+| `source` | `imap` (self-host only), `gmail_oauth` or `forwarding`, each only if enabled on the server |
 | `forwardingAddress` | For `forwarding`: the address to forward bank mail to (Gmail → Settings → Forwarding) |
 | `orderPrefix` | 1–16 letters or digits, stored upper case (default `PMH`) |
 | `webhookUrl` | `https://` URL on port 443 with a public host name, or `null` |
@@ -168,10 +168,10 @@ List or read configs. Secrets are never returned.
 #### `POST /email-configs`
 
 ```json
-{ "gmail": "shop@gmail.com", "banks": ["CAKE"], "webhookUrl": "https://shop.example.com/webhooks/paymailhook", "orderPrefix": "PMH" }
+{ "gmail": "shop@gmail.com", "source": "forwarding", "banks": ["CAKE"], "webhookUrl": "https://shop.example.com/webhooks/paymailhook", "orderPrefix": "PMH" }
 ```
 
-For `"source": "imap"` also send `"imapPassword"` (a 16-letter Google App Password). Answers `201` with the config and, **once only**, `ingestToken`, `webhookSecret` (`whsec_…`) and `appsScript` (the `Code.gs` to paste into Google Apps Script; `null` for other sources). Store the webhook secret right away.
+`source` is required. For `"source": "imap"` also send `"imapPassword"` (a 16-letter Google App Password); a `gmail_oauth` config is finished by connecting the Google account in the dashboard. Answers `201` with the config and, **once only**, `webhookSecret` (`whsec_…`). Store it right away.
 
 #### `PATCH /email-configs/{id}`
 
@@ -181,9 +181,9 @@ Any of `webhookUrl` (or `null`), `orderPrefix`, `banks` (at least one), `imapPas
 
 Deletes the config with its transactions and webhook history. Answers `204`.
 
-#### `POST /email-configs/{id}/rotate-token` · `POST /email-configs/{id}/rotate-secret`
+#### `POST /email-configs/{id}/rotate-secret`
 
-New ingest token (and a new `appsScript` to paste) or new webhook secret. The old value stops working immediately.
+New webhook secret. The old one stops working immediately.
 
 #### `POST /email-configs/{id}/test-webhook`
 
@@ -219,10 +219,6 @@ A VietQR image (SVG) customers can scan with any banking app.
 #### `GET /share/t/{token}` · `GET /share/c/{token}`
 
 JSON behind the public share pages (one transaction; a paginated list of incoming transactions).
-
-#### `POST /ingest`
-
-Used by the generated Apps Script, not by your application: `Authorization: Bearer <ingest token>`, body = the raw email (`message/rfc822`).
 
 ## Webhooks
 

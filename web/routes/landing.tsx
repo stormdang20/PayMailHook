@@ -26,7 +26,7 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: BellRing,
     title: 'Ba cách kết nối Gmail',
-    text: 'Dán một đoạn Apps Script, dùng App Password qua IMAP, hoặc cấp quyền đọc bằng tài khoản Google. Kèm thông báo đẩy khi có tiền vào.',
+    text: 'Dùng App Password qua IMAP, cấp quyền đọc bằng tài khoản Google, hoặc chuyển tiếp email ngân hàng. Kèm thông báo đẩy khi có tiền vào.',
   },
   {
     icon: QrCode,

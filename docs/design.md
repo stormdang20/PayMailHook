@@ -151,7 +151,9 @@ const BANKS = {
 - Amount `2.570.000` becomes `2570000n`. Times get the `+07:00` offset.
 - **Order code matching:** `description.toUpperCase().match(/<PREFIX>([A-Z0-9]+)/)`, **without stripping spaces or dots**, so `MBVCB.123.PMH456.DANG…` yields `456` instead of swallowing the trailing text. Only matched when `direction = in`.
 
-### 2.5 Apps Script source (Hosted)
+### 2.5 Apps Script source (Hosted) — removed on 2026-09-28
+
+> Replaced by Gmail OAuth and forwarding; kept as history. See the deviations log, "Apps Script source removed".
 
 **Endpoint:** `POST /api/ingest` with headers `Authorization: Bearer <token>` and `Content-Type: message/rfc822`, body is the raw MIME.
 - The token is looked up via `sha256` in `ingest_token_hash`. Wrong token returns 401.

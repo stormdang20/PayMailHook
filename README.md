@@ -13,11 +13,11 @@ Supported banks: **CAKE by VPBank** and **Timo**.
 ```
 Bank ──► user's Gmail
                  │
-                 ├─ Hosted:    Apps Script (1-minute trigger) ── POST /api/ingest (Bearer token) ───┐
-                 ├─ Self-host: container connects via IMAP IDLE (App Password) ─────────────────────┤ raw MIME
-                 └─ (later)    Gmail OAuth + Pub/Sub, optional 1-click like payhook ────────────────┘
+                 ├─ IMAP IDLE (self-host, App Password) ─────────────────────────────────────────┐
+                 ├─ Gmail OAuth: Pub/Sub push ── Gmail API (gmail.readonly) ─────────────────────┤ raw MIME
+                 └─ Forwarding: Gmail filter ── Cloudflare Email Routing ── email() / relay ─────┘
                                                                                                     ▼
-  1. resolve the email config (via token / IMAP account)
+  1. resolve the email config (via IMAP account / Google account / forwarding address)
   2. verify DKIM (d= matches the bank domain) + To header = the config's Gmail
   3. parse per bank → { amount, direction, description, bankTxnId?, occurredAt }
   4. store transaction (unique Message-ID)
@@ -29,7 +29,7 @@ Bank ──► user's Gmail
 
 | | Hosted | Self-host |
 |---|---|---|
-| Email intake | Apps Script in the user's Gmail | IMAP IDLE, the container connects outbound (no public URL needed) |
+| Email intake | Gmail OAuth or forwarding | IMAP IDLE, the container connects outbound (no public URL needed); Gmail OAuth and forwarding too |
 | Runtime | Cloudflare Workers + Queues + Cron, Neon Postgres | Docker compose: Bun server + Postgres |
 | Cost | Free, no domain needed (`*.workers.dev`) | Free |
 
@@ -53,9 +53,9 @@ docker compose up -d        # Postgres + app; migrations run on startup
 
 Open http://localhost:3010 and sign up. For a public host, set `BETTER_AUTH_URL` to its URL (for example `https://pay.example.com`) and put the app behind HTTPS.
 
-Two ways to feed emails in:
+Ways to feed emails in:
 - **IMAP (recommended for self-host):** turn on 2-step verification for the Gmail account, create an App Password at https://myaccount.google.com/apppasswords, then add the Gmail with the IMAP option. The container connects out to `imap.gmail.com`, so no public URL is needed.
-- **Apps Script:** needs the app reachable from the internet, because Google's servers post to `/api/ingest`.
+- **Gmail OAuth** or **forwarding:** see [Optional features](#optional-features). Gmail OAuth needs the app reachable from the internet (Pub/Sub pushes to it).
 
 Self-host allows webhooks to private addresses (LAN, `http://`) by default: `ALLOW_PRIVATE_WEBHOOKS=true`.
 
@@ -82,7 +82,8 @@ Requirements: a Cloudflare account and a [Neon](https://neon.tech) Postgres data
    # optional: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ALLOW_SIGNUP (as a var)
    ```
 7. **Deploy:** `bun install && bun run deploy`.
-8. Open the Worker URL, sign up (you become admin), add your Gmail, and paste the generated Apps Script into https://script.google.com with that Gmail account, then run `setup()` once.
+8. Enable at least one email source for Workers: **Gmail OAuth** or **forwarding** (see [Optional features](#optional-features)); IMAP needs a long-lived connection, so it runs on self-host only.
+9. Open the Worker URL, sign up (you become admin) and add your Gmail.
 
 The hourly cron re-queues stuck deliveries and deletes old logs; nothing else needs scheduling.
 
@@ -92,7 +93,7 @@ The hourly cron re-queues stuck deliveries and deletes old logs; nothing else ne
 |---|---|---|
 | Sign in with Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth client of type "Web application"; redirect URI `<BETTER_AUTH_URL>/api/auth/callback/google` |
 | Web Push on incoming money | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | `bun scripts/generate-vapid.ts` prints a pair; users click "Bật thông báo" |
-| Gmail OAuth source (1-click, no script) | `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN` + Google sign-in | See below. `gmail.readonly` is a restricted scope: "unsafe" warning and max 100 test users until Google's verification |
+| Gmail OAuth source (1-click, no password) | `GOOGLE_PUBSUB_TOPIC`, `GOOGLE_PUBSUB_VERIFICATION_TOKEN` + Google sign-in | See below. `gmail.readonly` is a restricted scope: "unsafe" warning and max 100 test users until Google's verification |
 | Forwarding source (Gmail forwards bank mail to PayMailHook) | `INBOUND_EMAIL_DOMAIN` (+ `INBOUND_WEBHOOK_SECRET` for self-host) | A domain on Cloudflare with Email Routing. Hosted: catch-all → this Worker. Self-host: catch-all → [deploy/email-relay](deploy/email-relay/README.md). The dashboard shows each Gmail's address and Gmail's confirmation code |
 | API keys / MCP | nothing | Create keys on the "API key" page. REST: header `x-api-key`. MCP endpoint `<app>/mcp` with `Authorization: Bearer <key>`; tools `list_transactions`, `get_payment_status` |
 
@@ -128,8 +129,8 @@ Each matched incoming transfer is POSTed to your URL as a [Standard Webhooks](ht
 
 | Phase | Features |
 |---|---|
-| **P1 Core** | `POST /api/ingest` and Apps Script, DKIM verification, CAKE and Timo parsers, transaction storage, order-code matching, webhook delivery (signing, retry, 30-day logs, SSRF protection) |
-| **P2 Accounts** | Sign-up/sign-in (email+password, Google), email config CRUD, Apps Script generator page with the token pre-filled, "last email received" status, token and webhook secret rotation, API keys |
+| **P1 Core** | `POST /api/ingest` and Apps Script (both removed later, see deviations), DKIM verification, CAKE and Timo parsers, transaction storage, order-code matching, webhook delivery (signing, retry, 30-day logs, SSRF protection) |
+| **P2 Accounts** | Sign-up/sign-in (email+password, Google), email config CRUD, Apps Script generator page (removed later), "last email received" status, webhook secret rotation, API keys |
 | **P2.5 Self-host** | Docker compose, email intake via IMAP IDLE, webhook retry via in-process timers |
 | **P3 Dashboard** | Realtime transactions, webhook logs and manual retry, QR generation (VietQR), shareable transaction links, integration guide page, Privacy page |
 | **P4 Extensions** | Web Push, admin (user management, roles), MCP server (Xiaozhi AI), **Gmail OAuth** (optional 1-click, shows the "unsafe" warning until CASA is passed) |
@@ -139,7 +140,7 @@ Each matched incoming transfer is POSTed to your URL as a [Standard Webhooks](ht
 | # | Decision | Alternatives considered | Rationale |
 |---|---|---|---|
 | D1 | Roadmap: personal use first, SaaS later, but **full-featured and multi-tenant from day one** | Minimal MVP | The goal is parity with payhook. Retrofitting a multi-tenant schema later is very costly |
-| D2 | Email intake: **Apps Script** (Hosted), **IMAP IDLE** (Self-host), **Gmail OAuth** as an option in P4. Every path feeds raw MIME into the same core function | Gmail auto-forward + Email Worker; OAuth only | Forwarding requires a domain and many setup steps. `forwardingAddresses.create` is Workspace-only. OAuth with `gmail.readonly`/`settings.basic` is a restricted scope ("unsafe" warning, max 100 users, CASA). Apps Script runs as the user, so Google does not require verification. IMAP works on localhost because it only connects outbound |
+| D2 | Email intake: **IMAP IDLE** (self-host), **Gmail OAuth** with Pub/Sub, and **forwarding** via Cloudflare Email Routing. Every path feeds raw MIME into the same core function | Apps Script (shipped in P1, removed on 2026-09-28) | IMAP works on localhost because it only connects outbound. Gmail OAuth is one click but `gmail.readonly` is a restricted scope ("unsafe" warning, max 100 users until CASA). Forwarding needs a domain but no Google permission. Apps Script needed pasting a script and authorising it per Gmail, which users found too complex |
 | D3 | Banks: CAKE and Timo | | Real sample emails are available for both |
 | D4 | Hosted runs on Cloudflare Workers (free). Self-host runs Bun in Docker. The **core is plain TS**, shared by both | Vercel Hobby | Vercel Hobby forbids commercial use, cron runs only once a day, and there is no queue. Workers free tier has 100k requests/day, Queues and Cron |
 | D5 | Dedup key is `Message-ID` (covered by the DKIM signature) | `transactionId` | Timo emails have no transaction ID |
@@ -158,7 +159,7 @@ Each matched incoming transfer is POSTed to your URL as a [Standard Webhooks](ht
 
 ## Stack
 
-TypeScript · Bun · Hono · Drizzle · Postgres (Neon + Hyperdrive) · better-auth · Cloudflare Workers / Queues / Cron · Google Apps Script · `imapflow` (Self-host) · React · Vite · TanStack Query · shadcn/ui · `mailauth` (DKIM verification over DNS-over-HTTPS) · `postal-mime` · `vietnam-qr-pay` · Biome
+TypeScript · Bun · Hono · Drizzle · Postgres (Neon + Hyperdrive) · better-auth · Cloudflare Workers / Queues / Cron / Email Routing · `imapflow` (Self-host) · React · Vite · TanStack Query · shadcn/ui · `mailauth` (DKIM verification over DNS-over-HTTPS) · `postal-mime` · `vietnam-qr-pay` · Biome
 
 ## Directory layout
 
@@ -170,10 +171,9 @@ src/
   imap.ts        # Self-host IMAP IDLE listeners
   worker.ts      # Hosted entry: fetch, queue, scheduled
   server.ts      # Self-host/dev entry: Bun server + IMAP + retry timers + SPA
-apps-script/     # Code.gs template users paste into Gmail
 web/             # React SPA (Vite, shadcn/ui)
 migrations/      # drizzle-kit
-scripts/         # dev helpers (create-config, anonymize-fixtures)
+scripts/         # dev helpers (anonymize-fixtures, generate-vapid)
 test/            # bun test + PGlite; fixtures/ are anonymized bank emails (real ones stay in gitignored mail-template/)
 ```
 
@@ -182,5 +182,5 @@ test/            # bun test + PGlite; fixtures/ are anonymized bank emails (real
 - [x] Detailed design: [docs/design.md](docs/design.md) (schema, email intake flow, webhooks, API/auth, testing)
 - [x] Implementation plan: [docs/plans/2026-09-24-paymailhook.md](docs/plans/2026-09-24-paymailhook.md); deviations and their reasons: [docs/plans/2026-09-24-paymailhook-deviations.md](docs/plans/2026-09-24-paymailhook-deviations.md)
 - [x] P1 core pipeline, P2 accounts and dashboard, P2.5 self-host, P3 dashboard, P4 extensions
-- [ ] Spike on a real deployment: does Apps Script's `getRawContent()` pass DKIM; CPU time per ingest on Workers (10 ms free limit)
+- [ ] Spike on a real deployment: CPU time per ingest on Workers (10 ms free limit)
 - [ ] Real-world checks: IMAP reconnect, Web Push delivery, MCP client, Gmail OAuth with Pub/Sub
