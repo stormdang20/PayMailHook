@@ -13,21 +13,17 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
   await page.getByRole('button', { name: 'Đăng ký', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Kết nối' })).toBeVisible();
 
+  await expect(page.getByRole('combobox', { name: 'Cách nhận email' })).toHaveText('Chuyển tiếp email');
   await page.getByLabel('Gmail').fill(gmail);
   await page.getByLabel('URL webhook (không bắt buộc)').fill('http://localhost:4455/__e2e/hook');
   await page.getByRole('button', { name: 'Thêm' }).click();
-  const script = await page.getByRole('dialog').locator('textarea').inputValue();
-  const token = script.match(/const INGEST_TOKEN = '([^']+)'/)?.[1];
-  expect(token).toBeTruthy();
+  await expect(page.getByRole('dialog')).toContainText('whsec_');
   await page.keyboard.press('Escape');
 
-  // What Apps Script does: post the raw bank email with the config's token.
-  const raw = await (await request.get(`/__e2e/signed-email?to=${gmail}`)).body();
-  const ingest = await request.post('/api/ingest', {
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'message/rfc822' },
-    data: raw,
-  });
-  expect(await ingest.json()).toMatchObject({ ok: true, status: 'stored' });
+  // The bank email reaches the config's forwarding address.
+  const address = await page.locator('code').filter({ hasText: /^pmh-/ }).textContent();
+  const forwarded = await request.post(`/__e2e/forward?gmail=${gmail}&to=${address}`);
+  expect(await forwarded.json()).toMatchObject({ ok: true, status: 'stored' });
 
   await page.getByRole('link', { name: 'Giao dịch' }).click();
   const row = page.getByRole('row').filter({ hasText: 'PMH123456' });

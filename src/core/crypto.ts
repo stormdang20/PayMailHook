@@ -3,10 +3,6 @@ const utf8 = new TextEncoder();
 export const randomToken = (bytes = 24) =>
   crypto.getRandomValues(new Uint8Array(bytes)).toBase64({ alphabet: 'base64url', omitPadding: true });
 
-export async function sha256Hex(s: string) {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', utf8.encode(s))).toHex();
-}
-
 const aesKey = (keyB64: string) =>
   crypto.subtle.importKey('raw', Uint8Array.fromBase64(keyB64), 'AES-GCM', false, ['encrypt', 'decrypt']);
 

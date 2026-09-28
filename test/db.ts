@@ -18,7 +18,7 @@ export async function seedConfig(db: Database, overrides: Partial<schema.EmailCo
     .values({ id: userId, name: 'Test', email: `${userId}@test.local`, emailVerified: false, createdAt: new Date() });
   const [config] = await db
     .insert(schema.emailConfigs)
-    .values({ userId, gmail: 'owner@gmail.com', ingestTokenHash: crypto.randomUUID(), ...overrides })
+    .values({ userId, gmail: 'owner@gmail.com', source: 'forwarding', ...overrides })
     .returning();
   return config;
 }

@@ -7,14 +7,13 @@ import type { AppEnv } from './app';
 const PUBLIC_PATHS = [
   /^\/api\/auth\//,
   /^\/api\/config$/,
-  /^\/api\/ingest$/,
   /^\/api\/qr$/,
   /^\/api\/share\//,
   /^\/api\/gmail\/pubsub$/,
   /^\/api\/inbound$/, // authenticated by the relay's HMAC signature
 ];
 
-/** Public paths authenticate on their own (better-auth, ingest token) or not at all. */
+/** Public paths authenticate on their own (better-auth, Pub/Sub token, relay signature) or not at all. */
 export const isPublicPath = (path: string) => PUBLIC_PATHS.some((p) => p.test(path));
 
 const isBanned = (u: { banned: boolean | null; banExpires: Date | null } | undefined) =>

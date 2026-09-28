@@ -17,27 +17,25 @@ beforeEach(async () => {
     sent.push({ url, init });
     return new Response('received', { status: 202 });
   }) as typeof fetch;
-  const { deps } = makeDeps(db, { fetch: fakeFetch });
+  const { deps } = makeDeps(db, { fetch: fakeFetch, inbound: { domain: 'in.test', secret: 'relay-secret' } });
   app = createApp(() => deps);
 });
 afterEach(() => close());
 
-const create = async (cookie: string, body: unknown = { gmail: 'Shop.Owner@gmail.com' }) => {
+const create = async (cookie: string, body: unknown = { gmail: 'Shop.Owner@gmail.com', source: 'forwarding' }) => {
   const res = await call(app, cookie, 'POST', '/api/email-configs', body);
   return { res, body: await json(res) };
 };
 
-test('create returns the token, secret and Code.gs once; reads never expose them', async () => {
+test('create returns the webhook secret once; reads never expose it', async () => {
   const { cookie } = await signUp(app, db);
   const { res, body } = await create(cookie, {
     gmail: 'Shop.Owner@gmail.com',
+    source: 'forwarding',
     webhookUrl: 'https://shop.example.com/hook',
   });
   expect(res.status).toBe(201);
-  expect(body.ingestToken).toBeString();
   expect(body.webhookSecret).toStartWith('whsec_');
-  expect(body.appsScript).toContain(`const INGEST_TOKEN = '${body.ingestToken}';`);
-  expect(body.appsScript).toContain("const INGEST_URL = 'http://app.test/api/ingest';");
   expect(body.config).toMatchObject({
     gmail: 'shop.owner@gmail.com',
     orderPrefix: 'PMH',
@@ -46,8 +44,7 @@ test('create returns the token, secret and Code.gs once; reads never expose them
   const list = await json(await call(app, cookie, 'GET', '/api/email-configs'));
   expect(list).toHaveLength(1);
   const text = JSON.stringify(list);
-  for (const secret of ['ingestTokenHash', 'webhookSecretEnc', 'imapPasswordEnc', body.ingestToken])
-    expect(text).not.toContain(secret);
+  for (const secret of ['webhookSecretEnc', 'imapPasswordEnc', body.webhookSecret]) expect(text).not.toContain(secret);
 });
 
 test("another user's config is 404 for every route", async () => {
@@ -59,7 +56,6 @@ test("another user's config is 404 for every route", async () => {
     ['GET', `/api/email-configs/${id}`],
     ['PATCH', `/api/email-configs/${id}`],
     ['DELETE', `/api/email-configs/${id}`],
-    ['POST', `/api/email-configs/${id}/rotate-token`],
     ['POST', `/api/email-configs/${id}/rotate-secret`],
     ['POST', `/api/email-configs/${id}/test-webhook`],
   ]) {
@@ -83,20 +79,19 @@ test('PATCH validates the webhook url and the order prefix', async () => {
   expect(await json(await patch({ webhookUrl: null }))).toMatchObject({ webhookUrl: null });
 });
 
-test('rotating the token invalidates the old one', async () => {
+test('the source is required and Apps Script is gone', async () => {
   const { cookie } = await signUp(app, db);
-  const { body } = await create(cookie);
-  const rotated = await json(await call(app, cookie, 'POST', `/api/email-configs/${body.config.id}/rotate-token`));
-  expect(rotated.appsScript).toContain(rotated.ingestToken);
-  const ingest = (token: string) =>
-    app.request('/api/ingest', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: 'x' });
-  expect((await ingest(body.ingestToken)).status).toBe(401);
-  expect((await ingest(rotated.ingestToken)).status).not.toBe(401);
+  expect((await create(cookie, { gmail: 'a@gmail.com' })).res.status).toBe(400);
+  expect((await create(cookie, { gmail: 'a@gmail.com', source: 'apps_script' })).res.status).toBe(400);
 });
 
 test('rotating the secret returns a new one; test-webhook signs with it', async () => {
   const { cookie } = await signUp(app, db);
-  const { body } = await create(cookie, { gmail: 'a@gmail.com', webhookUrl: 'https://shop.example.com/hook' });
+  const { body } = await create(cookie, {
+    gmail: 'a@gmail.com',
+    source: 'forwarding',
+    webhookUrl: 'https://shop.example.com/hook',
+  });
   const id = body.config.id;
   const { webhookSecret } = await json(await call(app, cookie, 'POST', `/api/email-configs/${id}/rotate-secret`));
   expect(webhookSecret).not.toBe(body.webhookSecret);
@@ -119,7 +114,7 @@ test('test-webhook without a url is a 400', async () => {
 
 test('invalid bodies are 400 validation errors; delete removes the config', async () => {
   const { cookie } = await signUp(app, db);
-  const bad = await create(cookie, { gmail: 'not-an-email' });
+  const bad = await create(cookie, { gmail: 'not-an-email', source: 'forwarding' });
   expect(bad.res.status).toBe(400);
   expect(bad.body.error.code).toBe('validation');
   const { body } = await create(cookie);
@@ -131,10 +126,10 @@ test('invalid bodies are 400 validation errors; delete removes the config', asyn
 test('banks: both by default, chosen on create, editable, never empty', async () => {
   const { cookie } = await signUp(app, db);
   expect((await create(cookie)).body.config.banks).toEqual(['CAKE', 'TIMO']);
-  const { body } = await create(cookie, { gmail: 'timo.only@gmail.com', banks: ['TIMO'] });
+  const { body } = await create(cookie, { gmail: 'timo.only@gmail.com', source: 'forwarding', banks: ['TIMO'] });
   expect(body.config.banks).toEqual(['TIMO']);
   const patch = (b: unknown) => call(app, cookie, 'PATCH', `/api/email-configs/${body.config.id}`, b);
   expect(await json(await patch({ banks: ['CAKE'] }))).toMatchObject({ banks: ['CAKE'] });
   expect((await patch({ banks: [] })).status).toBe(400);
-  expect((await create(cookie, { gmail: 'x@gmail.com', banks: ['VCB'] })).res.status).toBe(400);
+  expect((await create(cookie, { gmail: 'x@gmail.com', source: 'forwarding', banks: ['VCB'] })).res.status).toBe(400);
 });

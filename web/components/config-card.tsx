@@ -50,15 +50,6 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
         : toast.success(`Webhook trả về HTTP ${r.statusCode} sau ${r.durationMs} ms`),
     onError,
   });
-  const rotateToken = useMutation({
-    mutationFn: () => parseResponse(byId['rotate-token'].$post({ param })),
-    onSuccess: (r) =>
-      onSecrets([
-        { label: 'Ingest token', value: r.ingestToken },
-        { label: 'Apps Script (Code.gs)', value: r.appsScript, multiline: true },
-      ]),
-    onError,
-  });
   const rotateSecret = useMutation({
     mutationFn: () => parseResponse(byId['rotate-secret'].$post({ param })),
     onSuccess: (r) => onSecrets([{ label: 'Webhook secret', value: r.webhookSecret }]),
@@ -121,13 +112,6 @@ export function ConfigCard({ config, onSecrets }: { config: EmailConfig; onSecre
           >
             Gửi thử
           </Button>
-          <ConfirmButton
-            title="Tạo token mới?"
-            description="Token cũ ngừng hoạt động ngay. Bạn phải dán lại script mới vào Apps Script."
-            onConfirm={() => rotateToken.mutate()}
-          >
-            Đổi token
-          </ConfirmButton>
           <ConfirmButton
             title="Tạo webhook secret mới?"
             description="Secret cũ ngừng hoạt động ngay. Hệ thống nhận webhook phải cập nhật secret mới."

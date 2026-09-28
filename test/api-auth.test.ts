@@ -55,8 +55,9 @@ test('a cross-site form POST with the cookie is blocked, same-origin is not', as
   expect((await post({ origin: ORIGIN })).status).not.toBe(403);
 });
 
-test('ingest stays public (token-authenticated, no session)', async () => {
-  const res = await app.request('/api/ingest', { method: 'POST', headers: { authorization: 'Bearer x' }, body: 'x' });
+test('inbound stays public (relay-signature-authenticated, no session)', async () => {
+  deps = makeDeps(db, { inbound: { domain: 'in.test', secret: 'relay-secret' } }).deps;
+  const res = await app.request('/api/inbound', { method: 'POST', headers: { 'x-inbound-signature': 'x' }, body: 'x' });
   expect(res.status).toBe(401);
   const body: unknown = await res.json();
   expect(body).toEqual({ error: { code: 'unauthorized' } });

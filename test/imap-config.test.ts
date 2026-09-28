@@ -25,7 +25,6 @@ test('an imap config stores the App Password encrypted and never returns it', as
   });
   expect(res.status).toBe(201);
   const body = await json(res);
-  expect(body.appsScript).toBeNull();
   expect(body.config).toMatchObject({ source: 'imap', hasImapPassword: true });
   const [row] = await db.select().from(emailConfigs);
   expect(row.imapPasswordEnc).toBeString();

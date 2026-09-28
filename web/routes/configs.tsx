@@ -44,14 +44,14 @@ function ImapSteps() {
       </ol>
       <p>
         Nếu Google báo "Cài đặt bạn đang tìm kiếm không khả dụng": xác minh 2 bước chưa bật, chỉ dùng khoá bảo mật, hoặc
-        tài khoản công ty đã tắt App Password. Khi đó hãy dùng cách Apps Script.
+        tài khoản công ty đã tắt App Password. Khi đó hãy dùng cách Chuyển tiếp email hoặc Gmail OAuth.
       </p>
       <p>Mật khẩu được mã hoá và không bao giờ hiển thị lại.</p>
     </div>
   );
 }
 
-type Source = 'imap' | 'apps_script' | 'gmail_oauth' | 'forwarding';
+type Source = 'imap' | 'gmail_oauth' | 'forwarding';
 
 const SOURCES: { value: Source; label: string; help: string; unavailable: string }[] = [
   {
@@ -63,20 +63,14 @@ const SOURCES: { value: Source; label: string; help: string; unavailable: string
   {
     value: 'gmail_oauth',
     label: 'Đăng nhập Google (Gmail OAuth)',
-    help: 'Cấp quyền đọc Gmail bằng tài khoản Google, không cần mật khẩu hay script. Google đẩy email mới về ngay.',
+    help: 'Cấp quyền đọc Gmail bằng tài khoản Google, không cần mật khẩu. Google đẩy email mới về ngay.',
     unavailable: 'máy chủ chưa bật',
   },
   {
     value: 'forwarding',
     label: 'Chuyển tiếp email',
-    help: 'Gmail tự chuyển tiếp email ngân hàng tới một địa chỉ riêng của PayMailHook. Không cần mật khẩu hay script.',
+    help: 'Gmail tự chuyển tiếp email ngân hàng tới một địa chỉ riêng của PayMailHook. Không cần mật khẩu.',
     unavailable: 'máy chủ chưa bật',
-  },
-  {
-    value: 'apps_script',
-    label: 'Apps Script',
-    help: 'Dán một đoạn script vào Gmail, script gửi email ngân hàng về mỗi phút. Cần máy chủ có địa chỉ public.',
-    unavailable: '',
   },
 ];
 
@@ -87,13 +81,13 @@ export function ConfigsPage() {
   const [params, setParams] = useSearchParams();
   const connectId = params.get('connect');
   const { data: server } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
-  // IMAP is the default wherever the server can run it (self-host); Apps Script otherwise.
-  const source: Source = chosen ?? (server?.imap ? 'imap' : 'apps_script');
   const available = (s: Source) =>
-    s === 'apps_script' ||
     (s === 'imap' && server?.imap) ||
     (s === 'gmail_oauth' && server?.gmailOAuth) ||
     (s === 'forwarding' && server?.forwarding);
+  // The first source the server offers, in SOURCES order (IMAP first on self-host).
+  const firstAvailable = SOURCES.find((s) => available(s.value))?.value;
+  const source: Source = chosen ?? firstAvailable ?? 'imap';
   const list = useQuery({
     queryKey: ['email-configs'],
     queryFn: () => parseResponse(configs.$get()),
@@ -114,10 +108,7 @@ export function ConfigsPage() {
         linkGmail(r.config.id); // leaves the page; the secret is shown again via "Đổi secret" if needed
         return;
       }
-      const secret = { label: 'Webhook secret (để hệ thống của bạn xác thực chữ ký)', value: r.webhookSecret };
-      setSecrets(
-        r.appsScript ? [{ label: 'Apps Script (Code.gs)', value: r.appsScript, multiline: true }, secret] : [secret],
-      );
+      setSecrets([{ label: 'Webhook secret (để hệ thống của bạn xác thực chữ ký)', value: r.webhookSecret }]);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -185,7 +176,11 @@ export function ConfigsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-muted-foreground text-xs">{SOURCES.find((s) => s.value === source)?.help}</p>
+              <p className="text-muted-foreground text-xs">
+                {server && !firstAvailable
+                  ? 'Máy chủ chưa bật cách nhận email nào: quản trị viên cần cấu hình IMAP (bản tự cài), Gmail OAuth hoặc chuyển tiếp email.'
+                  : SOURCES.find((s) => s.value === source)?.help}
+              </p>
             </div>
             <BankPicker />
             <div className="space-y-1.5">
@@ -196,7 +191,7 @@ export function ConfigsPage() {
               <Label htmlFor="webhookUrl">URL webhook (không bắt buộc)</Label>
               <Input id="webhookUrl" name="webhookUrl" placeholder="https://shop.example.com/webhooks/paymailhook" />
             </div>
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" disabled={create.isPending || !available(source)}>
               Thêm
             </Button>
             <p className="text-muted-foreground text-xs sm:col-span-4">

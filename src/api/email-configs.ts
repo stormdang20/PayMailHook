@@ -1,8 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { renderAppsScript } from '../core/apps-script';
-import { encryptText, randomToken, sha256Hex } from '../core/crypto';
+import { encryptText } from '../core/crypto';
 import { emailConfigs } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { newForwardingAddress } from '../core/forwarding';
@@ -11,7 +10,7 @@ import type { AppEnv } from './app';
 import { share, unshare } from './share';
 import { validate } from './validate';
 
-/** Never select token hashes or encrypted secrets into a response. */
+/** Never select encrypted secrets into a response. */
 const publicColumns = {
   id: emailConfigs.id,
   gmail: emailConfigs.gmail,
@@ -48,11 +47,6 @@ const banks = z
 const idParam = validate('param', z.object({ id: z.uuid() }));
 
 const owned = (userId: string, id: string) => and(eq(emailConfigs.id, id), eq(emailConfigs.userId, userId));
-const newToken = async () => {
-  const token = randomToken();
-  return { token, hash: await sha256Hex(token) };
-};
-const appsScriptFor = (deps: Deps, token: string) => renderAppsScript(`${deps.appUrl}/api/ingest`, token);
 const urlError = (deps: Deps, url: string | null | undefined) =>
   url ? validateWebhookUrl(url, urlPolicy(deps)) : null;
 const badUrl = (reason: string) => ({ error: { code: 'invalid_webhook_url', reason } });
@@ -87,7 +81,7 @@ export const emailConfigRoutes = new Hono<AppEnv>()
           webhookUrl: webhookUrl.optional(),
           orderPrefix: orderPrefix.optional(),
           banks: banks.optional(),
-          source: z.enum(['apps_script', 'imap', 'gmail_oauth', 'forwarding']).default('apps_script'),
+          source: z.enum(['imap', 'gmail_oauth', 'forwarding']),
           imapPassword: imapPassword.optional(),
         })
         .refine((b) => b.source !== 'imap' || b.imapPassword, { path: ['imapPassword'], message: 'required for imap' }),
@@ -103,23 +97,20 @@ export const emailConfigRoutes = new Hono<AppEnv>()
       }
       const reason = urlError(deps, body.webhookUrl);
       if (reason) return c.json(badUrl(reason), 400);
-      const { token, hash } = await newToken();
       const webhookSecret = newWebhookSecret();
       const [config] = await deps.db
         .insert(emailConfigs)
         .values({
           ...body,
           userId: c.var.user.id,
-          ingestTokenHash: hash,
           webhookSecretEnc: await encryptText(deps.encryptionKey, webhookSecret),
           imapPasswordEnc: imapPassword ? await encryptText(deps.encryptionKey, imapPassword) : null,
           forwardingAddress:
             body.source === 'forwarding' && deps.inbound ? newForwardingAddress(deps.inbound.domain) : null,
         })
         .returning(publicColumns);
-      // Shown once: only the hash and the encrypted secret are stored.
-      const appsScript = body.source === 'apps_script' ? appsScriptFor(deps, token) : null;
-      return c.json({ config, ingestToken: token, webhookSecret, appsScript }, 201);
+      // Shown once: only the encrypted secret is stored.
+      return c.json({ config, webhookSecret }, 201);
     },
   )
   .get('/:id', idParam, async (c) => {
@@ -164,17 +155,6 @@ export const emailConfigRoutes = new Hono<AppEnv>()
       .where(owned(c.var.user.id, c.req.valid('param').id))
       .returning({ id: emailConfigs.id });
     return deleted.length ? c.body(null, 204) : c.json(notFound, 404);
-  })
-  .post('/:id/rotate-token', idParam, async (c) => {
-    const { deps } = c.var;
-    const { token, hash } = await newToken();
-    const updated = await deps.db
-      .update(emailConfigs)
-      .set({ ingestTokenHash: hash })
-      .where(owned(c.var.user.id, c.req.valid('param').id))
-      .returning({ id: emailConfigs.id });
-    if (!updated.length) return c.json(notFound, 404);
-    return c.json({ ingestToken: token, appsScript: appsScriptFor(deps, token) });
   })
   .post('/:id/rotate-secret', idParam, async (c) => {
     const { deps } = c.var;

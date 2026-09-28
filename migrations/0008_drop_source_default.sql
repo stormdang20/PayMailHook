@@ -1,0 +1,1 @@
+ALTER TABLE "email_configs" ALTER COLUMN "source" DROP DEFAULT;

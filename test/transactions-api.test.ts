@@ -14,7 +14,7 @@ let app: ReturnType<typeof createApp>;
 let scheduled: [string, number, string?][];
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
-  const made = makeDeps(db);
+  const made = makeDeps(db, { inbound: { domain: 'in.test', secret: 'relay-secret' } });
   scheduled = made.scheduled;
   app = createApp(() => made.deps);
 });
@@ -23,7 +23,10 @@ afterEach(() => close());
 /** Signed-in user with one config (created through the API, so it is really theirs). */
 async function owner(email = 'a@test.dev') {
   const { cookie, userId } = await signUp(app, db, email);
-  const res = await call(app, cookie, 'POST', '/api/email-configs', { gmail: `${userId}@gmail.com` });
+  const res = await call(app, cookie, 'POST', '/api/email-configs', {
+    gmail: `${userId}@gmail.com`,
+    source: 'forwarding',
+  });
   const [config] = await db
     .select()
     .from(emailConfigs)

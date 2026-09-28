@@ -3,11 +3,9 @@ import { type Context, Hono } from 'hono';
 import { csrf } from 'hono/csrf';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
-import { sha256Hex } from '../core/crypto';
-import { account, emailConfigs, user } from '../core/db/schema';
+import { account, user } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { inboundSignature, receiveForwarded } from '../core/forwarding';
-import { ingestRawEmail } from '../core/ingest';
 import { isPublicPath, requireUser } from './auth';
 import { deliveryRoutes } from './deliveries';
 import { emailConfigRoutes } from './email-configs';
@@ -106,19 +104,6 @@ export function createApp(makeDeps: (c: Context) => Deps) {
         return result.status === 'unknown_recipient'
           ? c.json({ error: { code: 'unknown_recipient' } }, 404)
           : c.json({ ok: true, ...result });
-      })
-      .post('/api/ingest', async (c) => {
-        const { deps } = c.var;
-        const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
-        const [config] = token
-          ? await deps.db
-              .select()
-              .from(emailConfigs)
-              .where(eq(emailConfigs.ingestTokenHash, await sha256Hex(token)))
-          : [];
-        if (!config) return c.json({ error: { code: 'unauthorized' } }, 401);
-        const result = await ingestRawEmail(deps, config, new Uint8Array(await c.req.arrayBuffer()));
-        return c.json({ ok: true, ...result });
       })
   );
 }

@@ -20,7 +20,7 @@ const bytea = customType<{ data: Uint8Array }>({ dataType: () => 'bytea' });
 const tz = (name: string) => timestamp(name, { withTimezone: true });
 const createdAt = () => tz('created_at').notNull().defaultNow();
 
-export const ingestSource = pgEnum('ingest_source', ['apps_script', 'imap', 'gmail_oauth', 'forwarding']);
+export const ingestSource = pgEnum('ingest_source', ['imap', 'gmail_oauth', 'forwarding']);
 export const bank = pgEnum('bank', ['CAKE', 'TIMO']);
 export const direction = pgEnum('direction', ['in', 'out']);
 export const deliveryStatus = pgEnum('delivery_status', ['pending', 'retrying', 'success', 'failed']);
@@ -34,8 +34,7 @@ export const emailConfigs = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     gmail: text('gmail').notNull(),
-    source: ingestSource('source').notNull().default('apps_script'),
-    ingestTokenHash: text('ingest_token_hash').notNull().unique(),
+    source: ingestSource('source').notNull(),
     imapPasswordEnc: text('imap_password_enc'),
     lastIngestAt: tz('last_ingest_at'),
     ingestError: text('ingest_error'),

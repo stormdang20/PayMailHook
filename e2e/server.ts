@@ -5,6 +5,7 @@ import { createApp } from '../src/api/app';
 import { createAuth } from '../src/core/auth';
 import type { Deps } from '../src/core/deps';
 import { parseEnv } from '../src/core/env';
+import { inboundSignature } from '../src/core/forwarding';
 import { deliver } from '../src/core/webhook';
 import { createTestDb } from '../test/db';
 import { signedEmail, testResolver } from '../test/email';
@@ -26,6 +27,7 @@ const deps: Deps = {
   allowPrivateWebhooks: true,
   imapEnabled: false,
   appUrl: env.BETTER_AUTH_URL,
+  inbound: { domain: 'in.e2e.test', secret: 'e2e-relay-secret' },
   scheduleDelivery: async (id, delaySeconds, trigger) => {
     setTimeout(() => deliver(deps, id, trigger).catch(console.error), delaySeconds * 1000);
   },
@@ -33,11 +35,16 @@ const deps: Deps = {
 const cakeIncoming = await Bun.file('test/fixtures/cake/2.html').text(); // +149.000 đ, "PMH123456"
 
 const app = createApp(() => deps);
-// A bank email signed with the key testResolver knows, addressed to ?to=.
-app.get('/__e2e/signed-email', async (c) => {
-  const to = c.req.query('to') ?? '';
-  const raw = await signedEmail({ from: 'no-reply@cake.vn', to, html: cakeIncoming, domain: 'cake.vn' });
-  return c.body(raw, 200, { 'content-type': 'message/rfc822' });
+// What Gmail forwarding + the email relay do: a bank email sent to ?gmail=, delivered to the forwarding ?to=.
+app.post('/__e2e/forward', async (c) => {
+  const { gmail = '', to = '' } = c.req.query();
+  const raw = await signedEmail({ from: 'no-reply@cake.vn', to: gmail, html: cakeIncoming, domain: 'cake.vn' });
+  const signature = await inboundSignature('e2e-relay-secret', to, raw);
+  return app.request('/api/inbound', {
+    method: 'POST',
+    headers: { 'x-inbound-to': to, 'x-inbound-signature': signature },
+    body: raw,
+  });
 });
 app.post('/__e2e/hook', (c) => c.text('ok'));
 const spa = serveStatic({ path: './dist/client/index.html' });

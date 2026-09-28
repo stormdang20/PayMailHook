@@ -13,7 +13,7 @@ let close: () => Promise<void>;
 let app: ReturnType<typeof createApp>;
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
-  const { deps } = makeDeps(db);
+  const { deps } = makeDeps(db, { inbound: { domain: 'in.test', secret: 'relay-secret' } });
   app = createApp(() => deps);
 });
 afterEach(() => close());
@@ -22,6 +22,7 @@ async function owner(email = 'a@test.dev') {
   const { cookie, userId } = await signUp(app, db, email);
   const res = await call(app, cookie, 'POST', '/api/email-configs', {
     gmail: `${userId}@gmail.com`,
+    source: 'forwarding',
     webhookUrl: 'https://secret-shop.example.com/hook',
   });
   const [config] = await db
