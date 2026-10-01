@@ -24,6 +24,7 @@ const MESSAGES: Record<string, string> = {
   gmail_auth_failed: 'Quyền đọc Gmail đã hết hạn hoặc bị thu hồi, hãy bấm "Kết nối Gmail" lại.',
   gmail_account_mismatch: 'Tài khoản Google vừa cấp quyền không phải Gmail của cấu hình này.',
   gmail_oauth_not_available: 'Máy chủ chưa bật Gmail OAuth.',
+  gmail_connection_expired: 'Phiên kết nối Gmail đã hết hạn. Hãy bấm Đăng nhập với Google để thử lại.',
   password_exists: 'Tài khoản đã có mật khẩu, hãy dùng Đổi mật khẩu.',
 };
 

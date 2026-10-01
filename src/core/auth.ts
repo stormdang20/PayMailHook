@@ -1,14 +1,34 @@
 import { apiKey } from '@better-auth/api-key';
-import { betterAuth } from 'better-auth';
+import { betterAuth, type GenericEndpointContext } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { getOAuthState } from 'better-auth/api';
+import { setSessionCookie } from 'better-auth/cookies';
 import { admin } from 'better-auth/plugins/admin';
 import { username } from 'better-auth/plugins/username';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Database } from './db/client';
 import { account, session, user } from './db/schema';
 import type { Env } from './env';
 
 type WaitUntil = (promise: Promise<unknown>) => void;
+
+async function rememberGmailAccount(
+  linked: { id: string; providerId: string },
+  context: GenericEndpointContext | null,
+  appUrl: string,
+) {
+  if (linked.providerId !== 'google' || !context?.path?.startsWith('/callback/')) return;
+  const flow = z.uuid().safeParse((await getOAuthState())?.gmailConnect);
+  if (!flow.success) return;
+  context.setCookie(`pmh_gmail_${flow.data}`, linked.id, {
+    httpOnly: true,
+    secure: new URL(appUrl).protocol === 'https:',
+    sameSite: 'lax',
+    path: '/api/gmail',
+    maxAge: 600,
+  });
+}
 
 /** The email in the id_token Google just returned to better-auth (already verified by that exchange). */
 function googleEmail(idToken: string | null | undefined) {
@@ -30,6 +50,7 @@ async function claimEmail(db: Database, userId: string, email: string | null) {
   await db.delete(account).where(and(eq(account.userId, userId), eq(account.providerId, 'credential')));
   await db.delete(session).where(eq(session.userId, userId));
   await db.update(user).set({ emailVerified: true }).where(eq(user.id, userId));
+  return true;
 }
 
 /**
@@ -89,9 +110,19 @@ export function createAuth(db: Database, env: Env, waitUntil?: WaitUntil, ipHead
       },
       account: {
         create: {
-          after: async (linked) => {
-            if (linked.providerId === 'google') await claimEmail(db, linked.userId, googleEmail(linked.idToken));
+          after: async (linked, context) => {
+            if (linked.providerId !== 'google') return;
+            const claimed = await claimEmail(db, linked.userId, googleEmail(linked.idToken));
+            if (claimed && context && (await getOAuthState())?.link?.userId === linked.userId) {
+              const owner = await context.context.internalAdapter.findUserById(linked.userId);
+              const currentSession = await context.context.internalAdapter.createSession(linked.userId);
+              if (owner && currentSession) await setSessionCookie(context, { user: owner, session: currentSession });
+            }
+            await rememberGmailAccount(linked, context, env.BETTER_AUTH_URL);
           },
+        },
+        update: {
+          after: async (linked, context) => rememberGmailAccount(linked, context, env.BETTER_AUTH_URL),
         },
       },
     },

@@ -1,8 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { deleteCookie, getCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { emailConfigs } from '../core/db/schema';
-import { connectGmail, syncGmail } from '../core/gmail-oauth';
+import { addGmailAccount, connectGmail, syncGmail } from '../core/gmail-oauth';
+import { urlPolicy, validateWebhookUrl } from '../core/webhook';
 import type { AppEnv } from './app';
 import { validate } from './validate';
 
@@ -10,6 +12,35 @@ const pubsubBody = z.object({ message: z.object({ data: z.string() }) });
 const notification = z.object({ emailAddress: z.string(), historyId: z.union([z.string(), z.number()]) });
 
 export const gmailRoutes = new Hono<AppEnv>()
+  .post(
+    '/connect',
+    validate(
+      'json',
+      z.object({
+        flow: z.uuid(),
+        webhookUrl: z.string().max(2048).nullable().optional(),
+        banks: z
+          .array(z.enum(['CAKE', 'TIMO']))
+          .min(1)
+          .transform((values) => [...new Set(values)].sort())
+          .optional(),
+      }),
+    ),
+    async (context) => {
+      const { deps, user } = context.var;
+      if (!deps.gmailPush) return context.json({ error: { code: 'gmail_oauth_not_available' } }, 400);
+      const { flow, ...options } = context.req.valid('json');
+      const cookieName = `pmh_gmail_${flow}`;
+      const accountId = getCookie(context, cookieName);
+      if (!accountId) return context.json({ error: { code: 'gmail_connection_expired' } }, 400);
+      const reason = options.webhookUrl ? validateWebhookUrl(options.webhookUrl, urlPolicy(deps)) : null;
+      if (reason) return context.json({ error: { code: 'invalid_webhook_url', reason } }, 400);
+      const result = await addGmailAccount(deps, user.id, accountId, options);
+      if (!result) return context.json({ error: { code: 'not_found' } }, 404);
+      deleteCookie(context, cookieName, { path: '/api/gmail' });
+      return context.json(result);
+    },
+  )
   // Pub/Sub push subscription endpoint: <app>/api/gmail/pubsub?token=<GOOGLE_PUBSUB_VERIFICATION_TOKEN>.
   // Public; the shared token authenticates Google (inbox-zero does the same).
   .post('/pubsub', validate('json', pubsubBody), async (c) => {

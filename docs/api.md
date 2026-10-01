@@ -173,6 +173,8 @@ List or read configs. Secrets are never returned.
 
 `source` is required. For `"source": "imap"` also send `"imapPassword"` (a 16-letter Google App Password); a `gmail_oauth` config is finished by connecting the Google account in the dashboard. Answers `201` with the config and, **once only**, `webhookSecret` (`whsec_…`). Store it right away.
 
+The dashboard's Gmail OAuth flow instead authorizes Google first and calls `POST /gmail/connect` with `{ flow, banks?, webhookUrl? }`. This browser flow requires the account-selection cookie set by the OAuth callback and an authenticated owner. The email is fetched from Gmail, never accepted from the form. It returns `{ config: { id, gmail }, webhookSecret }`; the secret is `null` when reusing an existing config. Failed authorization creates no config.
+
 #### `PATCH /email-configs/{id}`
 
 Any of `webhookUrl` (or `null`), `orderPrefix`, `banks` (at least one), `imapPassword`. The Gmail address can't change; delete and recreate the config instead.

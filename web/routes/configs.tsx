@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Mailbox } from 'lucide-react';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { type BankCode, BankPicker, formBanks } from '@/components/bank-picker';
 import { ConfigCard } from '@/components/config-card';
 import { EmptyState } from '@/components/empty-state';
+import { GoogleIcon } from '@/components/google-icon';
 import { OrderCode } from '@/components/order-code';
 import { PageHeader } from '@/components/page-header';
 import { type Secret, SecretDialog } from '@/components/secret-dialog';
@@ -15,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, parseResponse } from '@/lib/api';
-import { linkGmail } from '@/lib/auth';
+import { addGmail, type GmailDraft } from '@/lib/auth';
 import { errorMessage } from '@/lib/errors';
 
 const configs = api['email-configs'];
@@ -80,6 +81,9 @@ export function ConfigsPage() {
   const [chosen, setSource] = useState<Source | null>(null);
   const [params, setParams] = useSearchParams();
   const connectId = params.get('connect');
+  const gmailFlow = params.get('gmail');
+  const gmailError = params.get('gmailError');
+  const handledCallback = useRef<string | null>(null);
   const { data: server } = useQuery({ queryKey: ['config'], queryFn: () => parseResponse(api.config.$get()) });
   const available = (s: Source) =>
     (s === 'imap' && server?.imap) ||
@@ -104,13 +108,31 @@ export function ConfigsPage() {
     }) => parseResponse(configs.$post({ json })),
     onSuccess: (r) => {
       queryClient.invalidateQueries({ queryKey: ['email-configs'] });
-      if (r.config.source === 'gmail_oauth') {
-        linkGmail(r.config.id); // leaves the page; the secret is shown again via "Đổi secret" if needed
-        return;
-      }
       setSecrets([{ label: 'Webhook secret (để hệ thống của bạn xác thực chữ ký)', value: r.webhookSecret }]);
     },
     onError: (e) => toast.error(errorMessage(e)),
+  });
+
+  const google = useMutation({
+    mutationFn: addGmail,
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+  const finishGoogle = useMutation({
+    mutationFn: async (flow: string) => {
+      const stored = sessionStorage.getItem(`gmail:${flow}`);
+      if (!stored) throw new Error('Phiên kết nối Gmail đã hết hạn. Hãy đăng nhập Google để thử lại.');
+      const draft: GmailDraft = JSON.parse(stored);
+      return parseResponse(api.gmail.connect.$post({ json: { ...draft, flow } }));
+    },
+    onSuccess: (result, flow) => {
+      sessionStorage.removeItem(`gmail:${flow}`);
+      toast.success(`Đã kết nối ${result.config.gmail}`);
+      if (result.webhookSecret) {
+        setSecrets([{ label: 'Webhook secret (để hệ thống của bạn xác thực chữ ký)', value: result.webhookSecret }]);
+      }
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['email-configs'] }),
   });
 
   // Back from Google's consent screen: finish connecting that config.
@@ -121,11 +143,23 @@ export function ConfigsPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['email-configs'] }),
   });
   const { mutate: connectConfig } = connect;
+  const { mutate: finishGmail } = finishGoogle;
   useEffect(() => {
-    if (!connectId) return;
+    const callback = gmailError ?? gmailFlow ?? connectId;
+    if (!callback || handledCallback.current === callback) return;
+    handledCallback.current = callback;
     setParams({}, { replace: true });
-    connectConfig(connectId);
-  }, [connectId, connectConfig, setParams]);
+    if (gmailError) {
+      sessionStorage.removeItem(`gmail:${gmailError}`);
+      toast.error(
+        'Chưa được cấp quyền đọc Gmail. Hãy thử lại; nếu Google chặn app đang kiểm thử, quản trị viên cần thêm Gmail vào Test users.',
+      );
+    } else if (gmailFlow) {
+      finishGmail(gmailFlow);
+    } else if (connectId) {
+      connectConfig(connectId);
+    }
+  }, [connectId, gmailFlow, gmailError, connectConfig, finishGmail, setParams]);
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -133,6 +167,10 @@ export function ConfigsPage() {
     const webhookUrl = String(form.get('webhookUrl')).trim();
     const imapPassword = source === 'imap' ? String(form.get('imapPassword')) : undefined;
     const banks = formBanks(form);
+    if (source === 'gmail_oauth') {
+      google.mutate({ banks, webhookUrl: webhookUrl || null });
+      return;
+    }
     create.mutate({
       gmail: String(form.get('gmail')).trim(),
       webhookUrl: webhookUrl || null,
@@ -183,17 +221,36 @@ export function ConfigsPage() {
               </p>
             </div>
             <BankPicker />
-            <div className="space-y-1.5">
-              <Label htmlFor="gmail">Gmail</Label>
-              <Input id="gmail" name="gmail" type="email" required placeholder="shop@gmail.com" />
-            </div>
-            <div className="space-y-1.5">
+            {source !== 'gmail_oauth' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="gmail">Gmail</Label>
+                <Input id="gmail" name="gmail" type="email" required placeholder="shop@gmail.com" />
+              </div>
+            )}
+            <div className={source === 'gmail_oauth' ? 'space-y-1.5 sm:col-span-2' : 'space-y-1.5'}>
               <Label htmlFor="webhookUrl">URL webhook (không bắt buộc)</Label>
               <Input id="webhookUrl" name="webhookUrl" placeholder="https://shop.example.com/webhooks/paymailhook" />
             </div>
-            <Button type="submit" disabled={create.isPending || !available(source)}>
-              Thêm
+            <Button
+              type="submit"
+              variant={source === 'gmail_oauth' ? 'outline' : 'default'}
+              disabled={create.isPending || google.isPending || finishGoogle.isPending || !available(source)}
+            >
+              {source === 'gmail_oauth' ? (
+                <>
+                  <GoogleIcon />
+                  {google.isPending || finishGoogle.isPending ? 'Đang kết nối…' : 'Đăng nhập với Google'}
+                </>
+              ) : (
+                'Thêm'
+              )}
             </Button>
+            {source === 'gmail_oauth' && (
+              <p className="text-muted-foreground text-xs sm:col-span-4">
+                Chọn tài khoản Google đang nhận email ngân hàng và cấp quyền đọc Gmail. Địa chỉ email sẽ được tự động
+                thêm sau khi kết nối thành công.
+              </p>
+            )}
             <p className="text-muted-foreground text-xs sm:col-span-4">
               URL webhook là địa chỉ trên website hoặc hệ thống của bạn, nơi PayMailHook gửi thông báo khi một đơn được
               thanh toán (bạn tự cung cấp, ví dụ https://shop.vn/webhooks/paymailhook). Chưa có hệ thống riêng thì để

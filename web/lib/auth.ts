@@ -26,4 +26,28 @@ export const linkGmail = (configId: string) =>
     provider: 'google',
     scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
     callbackURL: `/dashboard?connect=${configId}`,
+    errorCallbackURL: '/dashboard?gmailError=reconnect',
+    additionalParams: { prompt: 'consent select_account' },
   });
+
+export type GmailDraft = { banks: ('CAKE' | 'TIMO')[]; webhookUrl: string | null };
+
+export async function addGmail(draft: GmailDraft) {
+  const flow = crypto.randomUUID();
+  sessionStorage.setItem(`gmail:${flow}`, JSON.stringify(draft));
+  try {
+    await authCall(
+      authClient.linkSocial({
+        provider: 'google',
+        scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+        additionalParams: { prompt: 'consent select_account' },
+        additionalData: { gmailConnect: flow },
+        callbackURL: `/dashboard?gmail=${flow}`,
+        errorCallbackURL: `/dashboard?gmailError=${flow}`,
+      }),
+    );
+  } catch (error) {
+    sessionStorage.removeItem(`gmail:${flow}`);
+    throw error;
+  }
+}

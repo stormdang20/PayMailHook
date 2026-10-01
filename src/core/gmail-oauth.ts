@@ -3,10 +3,12 @@
 // (stored by better-auth's linkSocial). Plain fetch, so it runs on Workers and Bun alike.
 import { and, eq, isNotNull, lt, sql } from 'drizzle-orm';
 import { BANKS, bankForSender } from './banks';
-import { account, type EmailConfig, emailConfigs } from './db/schema';
+import { encryptText } from './crypto';
+import { account, type EmailConfig, emailConfigs, user } from './db/schema';
 import type { Deps } from './deps';
 import { ingestRawEmail } from './ingest';
 import { normalizeEmail } from './text';
+import { newWebhookSecret } from './webhook';
 
 export type GmailPush = { topic: string; verificationToken: string };
 
@@ -74,6 +76,51 @@ export async function connectGmail(deps: Deps, config: EmailConfig) {
     return null;
   }
   return 'gmail_account_mismatch';
+}
+
+export async function addGmailAccount(
+  deps: Deps,
+  userId: string,
+  accountId: string,
+  options: { banks?: ('CAKE' | 'TIMO')[]; webhookUrl?: string | null },
+) {
+  const [linked] = await deps.db
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.id, accountId), eq(account.userId, userId), eq(account.providerId, 'google')));
+  if (!linked) return null;
+  const token = await tokenFor(deps, userId, linked.id);
+  const profile = await gmail<{ emailAddress: string }>(deps, token, '/profile');
+  const address = profile.emailAddress.toLowerCase();
+  const watchState = await watch(deps, token);
+  return deps.db.transaction(async (transaction) => {
+    await transaction.select({ id: user.id }).from(user).where(eq(user.id, userId)).for('update');
+    const configs = await transaction
+      .select()
+      .from(emailConfigs)
+      .where(and(eq(emailConfigs.userId, userId), eq(emailConfigs.source, 'gmail_oauth')));
+    const existing = configs.find((config) => normalizeEmail(config.gmail) === normalizeEmail(address));
+    const connection = { gmail: address, googleAccountId: linked.id, ingestError: null, ...watchState };
+    if (existing) {
+      await transaction
+        .update(emailConfigs)
+        .set({ ...connection, gmailHistoryId: existing.gmailHistoryId ?? watchState.gmailHistoryId })
+        .where(eq(emailConfigs.id, existing.id));
+      return { config: { id: existing.id, gmail: address }, webhookSecret: null };
+    }
+    const webhookSecret = newWebhookSecret();
+    const [config] = await transaction
+      .insert(emailConfigs)
+      .values({
+        userId,
+        source: 'gmail_oauth',
+        ...options,
+        ...connection,
+        webhookSecretEnc: await encryptText(deps.encryptionKey, webhookSecret),
+      })
+      .returning({ id: emailConfigs.id, gmail: emailConfigs.gmail });
+    return { config, webhookSecret };
+  });
 }
 
 type History = {
