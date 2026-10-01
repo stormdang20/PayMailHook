@@ -20,6 +20,15 @@ export function htmlToLines(html: string): string[] {
     .filter(Boolean);
 }
 
+const vnd = new Intl.NumberFormat('vi-VN');
+
+/** `amount` in minor units of `currency`; VND keeps the banks' "149.000 đ" style. */
+export function formatMoney(amount: number, currency: string) {
+  if (currency === 'VND') return `${vnd.format(amount)} đ`;
+  const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency });
+  return money.format(amount / 10 ** (money.resolvedOptions().maximumFractionDigits ?? 0));
+}
+
 export const parseVnd = (s: string) => Number(s.replace(/\D/g, ''));
 
 export const vnTime = (d: string, m: string, y: string, hh: string, mm: string, ss = '00') =>

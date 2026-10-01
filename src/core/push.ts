@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { ParsedTxn } from './banks';
 import { pushSubscriptions } from './db/schema';
 import type { Deps } from './deps';
+import { formatMoney } from './text';
 import { validateWebhookUrl } from './webhook';
 
 export type Vapid = { publicKey: string; privateKey: string; subject: string }; // base64url raw P-256 keys
@@ -81,10 +82,9 @@ export async function notifyIncoming(deps: Deps, userId: string, txn: ParsedTxn,
   const { vapid } = deps;
   if (!vapid || txn.direction !== 'in') return;
   const subs = await deps.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
-  const vnd = new Intl.NumberFormat('vi-VN').format(txn.amount);
   const payload = utf8(
     JSON.stringify({
-      title: `+${vnd} đ`,
+      title: `+${formatMoney(txn.amount, txn.currency ?? 'VND')}`,
       body: orderId ? `Đơn ${orderId}: ${txn.description}` : txn.description,
       url: '/dashboard/transactions',
     }),

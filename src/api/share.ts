@@ -35,6 +35,7 @@ const publicColumns = {
   bank: transactions.bank,
   direction: transactions.direction,
   amount: transactions.amount,
+  currency: transactions.currency,
   description: transactions.description,
   orderId: transactions.orderId,
   bankTxnId: transactions.bankTxnId,

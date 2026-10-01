@@ -14,6 +14,7 @@ const columns = {
   bank: transactions.bank,
   direction: transactions.direction,
   amount: transactions.amount,
+  currency: transactions.currency,
   description: transactions.description,
   orderId: transactions.orderId,
   counterpartyName: transactions.counterpartyName,
@@ -28,7 +29,8 @@ function buildServer({ db }: Deps, userId: string) {
   server.registerTool(
     'list_transactions',
     {
-      description: 'Latest bank transactions (VND) read from the notification emails, newest first.',
+      description:
+        'Latest transactions read from the bank and PayPal notification emails, newest first. `amount` is in minor units of `currency` (VND: đồng, USD: cents).',
       annotations: { readOnlyHint: true },
       inputSchema: {
         direction: z.enum(['in', 'out']).optional().describe('"in" for money received, "out" for money sent'),
@@ -57,23 +59,36 @@ function buildServer({ db }: Deps, userId: string) {
     'get_payment_status',
     {
       description:
-        'Whether an order has been paid: sums incoming transfers carrying the order code. With `amount`, paid means the sum covers it.',
+        'Whether an order has been paid: sums incoming payments in `currency` carrying the order code. With `amount`, paid means the sum covers it.',
       annotations: { readOnlyHint: true },
       inputSchema: {
         orderId: z.string().max(64).describe('Order code without the prefix, e.g. 123456 for "PMH123456"'),
-        amount: z.number().int().positive().optional().describe('Expected amount in VND'),
+        amount: z.number().int().positive().optional().describe('Expected amount in minor units of `currency`'),
+        currency: z
+          .string()
+          .regex(/^[a-z]{3}$/i)
+          .default('VND')
+          .describe('ISO 4217 code, e.g. VND or USD'),
       },
     },
-    async ({ orderId, amount }) => {
+    async ({ orderId, amount, currency: asked }) => {
       const code = orderId.toUpperCase();
+      const currency = asked.toUpperCase();
       const payments = await db
         .select(columns)
         .from(transactions)
-        .where(and(mine, eq(transactions.orderId, code), eq(transactions.direction, 'in')))
+        .where(
+          and(
+            mine,
+            eq(transactions.orderId, code),
+            eq(transactions.direction, 'in'),
+            eq(transactions.currency, currency),
+          ),
+        )
         .orderBy(desc(transactions.occurredAt));
       const totalAmount = payments.reduce((sum, t) => sum + t.amount, 0);
       const paid = payments.length > 0 && (amount === undefined || totalAmount >= amount);
-      return text({ orderId: code, paid, totalAmount, payments });
+      return text({ orderId: code, paid, currency, totalAmount, payments });
     },
   );
   return server;

@@ -13,6 +13,7 @@ const columns = {
   bank: transactions.bank,
   direction: transactions.direction,
   amount: transactions.amount,
+  currency: transactions.currency,
   balanceAfter: transactions.balanceAfter,
   bankTxnId: transactions.bankTxnId,
   description: transactions.description,

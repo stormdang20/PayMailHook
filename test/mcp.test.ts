@@ -72,3 +72,22 @@ test('lists the two tools and answers payment status for the key owner only', as
   const list = toolResult((await rpc(key, 'tools/call', { name: 'list_transactions', arguments: {} })).body);
   expect(list.map((t: { orderId: string }) => t.orderId)).toEqual(['A1']);
 });
+
+test('payment status sums only payments in the asked currency', async () => {
+  const { userId, key } = await ownerWithKey();
+  const config = await seedConfig(db, { userId });
+  await seedTransaction(db, config, { orderId: 'C3', amount: 100 });
+  await seedTransaction(db, config, { orderId: 'C3', amount: 209, currency: 'USD', bank: 'PAYPAL' });
+  const status = async (args: object) =>
+    toolResult(
+      (await rpc(key, 'tools/call', { name: 'get_payment_status', arguments: { orderId: 'C3', ...args } })).body,
+    );
+  expect(await status({})).toMatchObject({ paid: true, currency: 'VND', totalAmount: 100 });
+  expect(await status({ currency: 'usd', amount: 209 })).toMatchObject({
+    paid: true,
+    currency: 'USD',
+    totalAmount: 209,
+  });
+  expect(await status({ currency: 'USD', amount: 300 })).toMatchObject({ paid: false, totalAmount: 209 });
+  expect(await status({ currency: 'EUR' })).toMatchObject({ paid: false, totalAmount: 0 });
+});

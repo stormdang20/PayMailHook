@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { bankForSender, extractOrderId, ParseError, parseCake, parsePaypal, parseTimo } from '../src/core/banks';
-import { htmlToLines, normalizeEmail } from '../src/core/text';
+import { formatMoney, htmlToLines, normalizeEmail } from '../src/core/text';
 
 const lines = async (p: string) => htmlToLines(await Bun.file(`test/fixtures/${p}`).text());
 
@@ -91,4 +91,10 @@ test('htmlToLines decodes entities and survives malformed ones', () => {
     'A&Bé€',
     '&#abc; &#99999999;',
   ]);
+});
+
+test('formatMoney reads minor units in the currency of the transaction', () => {
+  expect(formatMoney(149000, 'VND')).toBe('149.000 đ');
+  expect(formatMoney(209, 'USD')).toBe('2,09\u00a0US$');
+  expect(formatMoney(1000, 'JPY')).toBe('1.000\u00a0¥');
 });

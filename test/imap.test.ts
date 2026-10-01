@@ -40,7 +40,9 @@ test('scan ingests each bank email once and asks Gmail only for recent bank mail
   await scan(client, seen, ingest);
   await scan(client, seen, ingest);
   expect(ingested).toEqual(['raw-1', 'raw-2']);
-  expect(searches[0]).toEqual({ gmraw: 'from:(no-reply@cake.vn OR support@timo.vn OR service@intl.paypal.com) newer_than:1d' });
+  expect(searches[0]).toEqual({
+    gmraw: 'from:(no-reply@cake.vn OR support@timo.vn OR service@intl.paypal.com) newer_than:1d',
+  });
 });
 
 test('an email whose ingest failed is retried on the next scan', async () => {

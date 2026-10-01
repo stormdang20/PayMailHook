@@ -16,6 +16,7 @@ const columns = {
   createdAt: webhookDeliveries.createdAt,
   orderId: transactions.orderId,
   amount: transactions.amount,
+  currency: transactions.currency,
 };
 
 const byCreated = keyset(webhookDeliveries.createdAt, webhookDeliveries.id);
