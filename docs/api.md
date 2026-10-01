@@ -1,6 +1,6 @@
 # PayMailHook API
 
-PayMailHook reads your bank's balance-notification emails (CAKE by VPBank, Timo) and tells your system when a customer has paid. There are three ways to integrate:
+PayMailHook reads your bank's balance-notification emails (CAKE by VPBank, Timo) and PayPal "money received" emails, and tells your system when a customer has paid. There are three ways to integrate:
 
 | Way | Direction | Use it to |
 |---|---|---|
@@ -8,13 +8,13 @@ PayMailHook reads your bank's balance-notification emails (CAKE by VPBank, Timo)
 | [REST API](#rest-api) | Your server → PayMailHook | Look up transactions, check an order, manage configs. |
 | [MCP server](#mcp-server) | AI agent → PayMailHook | Let an assistant answer "has order 123 been paid?". |
 
-All amounts are integers in VND. All times are ISO 8601 in UTC (`2026-09-20T11:28:07.000Z`).
+All amounts are integers in the minor unit of `currency`: đồng for `VND` (no decimals), cents for `USD` (`209` is 2,09 USD). Bank transfers are always `VND`; PayPal uses the currency it received. All times are ISO 8601 in UTC (`2026-09-20T11:28:07.000Z`).
 
 ## How payments are matched
 
 1. You create an **email config**: the Gmail inbox that receives your bank's notifications, an **order prefix** (default `PMH`) and a **webhook URL**.
 2. Your customer transfers money with a description containing `<prefix><order code>`, for example `PMH123456`.
-3. PayMailHook receives the bank email, checks the bank's DKIM signature, reads the amount and description, and extracts the order code: the letters and digits right after the prefix (`MBVCB.123.PMH456.NGUYEN VAN A` gives `456`). Matching is case-insensitive; codes are returned in upper case.
+3. PayMailHook receives the bank email, checks the bank's DKIM signature, reads the amount and description, and extracts the order code: the letters and digits right after the prefix (`MBVCB.123.PMH456.NGUYEN VAN A` gives `456`). Matching is case-insensitive; codes are returned in upper case. For PayPal the description is the payer's note, so ask the payer to put the code there.
 4. For **incoming** money with an order code, PayMailHook sends a signed webhook to your URL and retries until you answer `2xx`.
 
 Order codes may contain only `A-Z` and `0-9`. Banks often strip or rewrite punctuation, so don't use `-`, `_` or spaces inside the code.
@@ -76,10 +76,10 @@ Base URL: `https://<your-paymailhook>/api`. Every endpoint below needs an API ke
 | `orderId` | string | Only transactions with this order code |
 | `direction` | `in` \| `out` | Money received or sent |
 | `configId` | uuid | Only this email config |
-| `bank` | `CAKE` \| `TIMO` | Only this bank |
+| `bank` | `CAKE` \| `TIMO` \| `PAYPAL` | Only this source |
 | `from`, `to` | `YYYY-MM-DD` | Vietnam calendar days, both inclusive |
 | `q` | string | Contains, case-insensitive, in the description, order code or payer name |
-| `minAmount`, `maxAmount` | integer | Amount range in VND, inclusive |
+| `minAmount`, `maxAmount` | integer | Amount range in minor units, inclusive; compared across currencies as-is, so combine with `bank` |
 | `hasOrder` | `true` | Only transactions whose description carried an order code |
 | `cursor`, `limit` | | See [Pagination](#pagination) |
 
@@ -97,6 +97,7 @@ curl "https://<your-paymailhook>/api/transactions?orderId=123456&direction=in" \
       "bank": "CAKE",
       "direction": "in",
       "amount": 149000,
+      "currency": "VND",
       "balanceAfter": null,
       "bankTxnId": "500000001",
       "description": "PMH123456",
@@ -113,7 +114,7 @@ curl "https://<your-paymailhook>/api/transactions?orderId=123456&direction=in" \
 }
 ```
 
-`balanceAfter` is only known for Timo, `bankTxnId` only for CAKE.
+`balanceAfter` is only known for Timo, `bankTxnId` only for CAKE and PayPal (its transaction ID). For PayPal, `counterpartyName` is the payer and `occurredAt` is the email's signed `Date`.
 
 #### `GET /transactions/{id}`
 
@@ -136,7 +137,7 @@ Creates (or returns the existing) public link token for one transaction, or revo
 | `status` | `pending` \| `retrying` \| `success` \| `failed` | Filter by status |
 | `cursor`, `limit` | | See [Pagination](#pagination) |
 
-Each item: `id` (also the `webhook-id` header), `transactionId`, `status`, `attemptCount`, `nextAttemptAt`, `lastStatusCode`, `createdAt`, `orderId`, `amount`.
+Each item: `id` (also the `webhook-id` header), `transactionId`, `status`, `attemptCount`, `nextAttemptAt`, `lastStatusCode`, `createdAt`, `orderId`, `amount`, `currency`.
 
 #### `GET /webhook-deliveries/{id}`
 
@@ -153,7 +154,7 @@ A config is one Gmail inbox plus where its payments are sent.
 | Field | Description |
 |---|---|
 | `gmail` | Inbox that receives the bank emails |
-| `banks` | Which banks notify this inbox: `["CAKE"]`, `["TIMO"]` or both (default both). Emails from other banks reaching this inbox are ignored, so each bank can use a different Gmail |
+| `banks` | Which banks notify this inbox: any of `"CAKE"`, `"TIMO"`, `"PAYPAL"` (API default `["CAKE","TIMO"]`; the dashboard preselects all). Emails from other banks reaching this inbox are ignored, so each bank can use a different Gmail |
 | `source` | `imap` (self-host only), `gmail_oauth` or `forwarding`, each only if enabled on the server |
 | `forwardingAddress` | For `forwarding`: the address to forward bank mail to (Gmail → Settings → Forwarding) |
 | `orderPrefix` | 1–16 letters or digits, stored upper case (default `PMH`) |
@@ -348,6 +349,6 @@ Endpoint: `https://<your-paymailhook>/mcp` (Streamable HTTP, stateless). Authent
 | Tool | Arguments | Returns |
 |---|---|---|
 | `list_transactions` | `direction?` (`in`/`out`), `orderId?`, `limit?` (1–50, default 20) | Latest transactions, newest first |
-| `get_payment_status` | `orderId`, `amount?` | `{ orderId, paid, totalAmount, payments[] }`: `paid` is true when incoming transfers with the code exist, or, with `amount`, when their sum covers it |
+| `get_payment_status` | `orderId`, `amount?`, `currency?` (default `VND`) | `{ orderId, paid, currency, totalAmount, payments[] }`: only incoming payments in `currency` count; `paid` is true when some exist, or, with `amount` (minor units), when their sum covers it |
 
 Try it with the MCP Inspector: `npx @modelcontextprotocol/inspector`, transport "Streamable HTTP", your `/mcp` URL and the `Authorization` header.

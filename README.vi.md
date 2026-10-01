@@ -2,7 +2,7 @@
 
 **Chuyển email thông báo ngân hàng Việt Nam thành webhook thanh toán có chữ ký.**
 
-PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **Timo**, xác minh chữ ký DKIM của ngân hàng, lưu giao dịch và thông báo cho ứng dụng của bạn khi giao dịch tiền vào chứa mã đơn hàng. Bạn có thể tự triển khai bằng Docker hoặc chạy trên Cloudflare Workers.
+PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **Timo**, cùng email nhận tiền **PayPal**, xác minh chữ ký DKIM của ngân hàng, lưu giao dịch và thông báo cho ứng dụng của bạn khi giao dịch tiền vào chứa mã đơn hàng. Bạn có thể tự triển khai bằng Docker hoặc chạy trên Cloudflare Workers.
 
 [English](README.md) · **Tiếng Việt**
 
@@ -32,7 +32,7 @@ PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **T
 ## Tính năng
 
 - **Ba nguồn email:** Gmail IMAP IDLE bằng App Password, Gmail OAuth với thông báo Pub/Sub, hoặc Gmail chuyển tiếp thư qua Cloudflare Email Routing.
-- **Nhận diện thanh toán:** tùy chỉnh tiền tố mã đơn, lưu giao dịch tiền vào/ra, biểu diễn số tiền VND bằng số nguyên và chống trùng theo `Message-ID` của email.
+- **Nhận diện thanh toán:** tùy chỉnh tiền tố mã đơn, lưu giao dịch tiền vào/ra, biểu diễn số tiền bằng số nguyên theo đơn vị nhỏ nhất kèm loại tiền (VND, hoặc loại tiền PayPal nhận) và chống trùng theo `Message-ID` của email.
 - **Webhook có chữ ký:** theo Standard Webhooks, tự gửi lại khi lỗi, lưu lịch sử gửi, gửi sự kiện thử, gửi lại thủ công và đổi secret.
 - **Dashboard:** tìm kiếm và lọc giao dịch, tự cập nhật mỗi năm giây khi trang giao dịch đang hiển thị, xem trạng thái kết nối email và nhật ký webhook. Giao diện hiện dùng tiếng Việt.
 - **Công cụ thanh toán:** tạo VietQR dạng SVG cho ngân hàng được hỗ trợ, chia sẻ giao dịch bằng liên kết có thể thu hồi, và trang giao dịch tiền vào công khai dành cho thu ngân.
@@ -43,6 +43,7 @@ PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **T
 | --- | --- | --- | --- |
 | CAKE by VPBank | `no-reply@cake.vn` | `cake.vn` | Mã giao dịch ngân hàng; thông tin đối tác giao dịch nếu có |
 | Timo | `support@timo.vn` | `timo.vn` | Số dư sau giao dịch |
+| PayPal (chỉ email nhận tiền) | `service@intl.paypal.com` | `intl.paypal.com` | Mã giao dịch PayPal; tên người gửi; ghi chú của người gửi làm nội dung; loại tiền (`USD`…) |
 
 Cả hai bộ phân tích đều đọc số tiền, chiều giao dịch, nội dung và thời gian giao dịch. PayMailHook theo dõi email thông báo: hệ thống không thực hiện chuyển tiền, giữ tiền hay kết nối API thanh toán của ngân hàng. Ứng dụng của bạn quản lý đơn hàng và quyết định giao dịch có đáp ứng yêu cầu thanh toán hay không.
 
@@ -50,7 +51,7 @@ Cả hai bộ phân tích đều đọc số tiền, chiều giao dịch, nội 
 
 ```mermaid
 flowchart TD
-    Bank[CAKE / Timo] --> Gmail[Hộp thư Gmail của bạn]
+    Bank[CAKE / Timo / PayPal] --> Gmail[Hộp thư Gmail của bạn]
     Gmail --> IMAP[IMAP IDLE: chỉ trên Bun]
     Gmail --> OAuth[Gmail API + Pub/Sub]
     Gmail --> Forward[Gmail chuyển tiếp + Email Routing]
@@ -296,7 +297,7 @@ Giao dịch tiền vào có mã khớp và URL webhook đã cấu hình tạo s�
 }
 ```
 
-Số tiền là số nguyên VND; thời gian theo ISO 8601 UTC. Trường đặc thù ngân hàng không có dữ liệu sẽ là `null`. Header theo [Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp` và `webhook-signature`.
+Số tiền là số nguyên theo đơn vị nhỏ nhất của `currency` (`149000` VND, `209` USD = 2,09 USD); thời gian theo ISO 8601 UTC. Trường đặc thù ngân hàng không có dữ liệu sẽ là `null`. Header theo [Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp` và `webhook-signature`.
 
 Bên nhận cần:
 
@@ -440,7 +441,7 @@ docs/                 API, thiết kế, nghiên cứu, lịch sử triển khai
 
 ## Giới hạn hiện tại
 
-- Chỉ có bộ phân tích mẫu CAKE và Timo. Ngân hàng đổi mẫu hoặc địa chỉ gửi có thể cần cập nhật parser.
+- Chỉ có bộ phân tích mẫu CAKE, Timo và email nhận tiền PayPal tiếng Việt; email PayPal khác (mua hàng, ủy quyền, thông báo) bị bỏ qua. Ngân hàng đổi mẫu hoặc địa chỉ gửi có thể cần cập nhật parser.
 - Khả năng nhận diện phụ thuộc email của ngân hàng và dịch vụ nhận thư. Không có cam kết độ trễ nhận diện hay đối soát trực tiếp với ngân hàng.
 - IMAP và Gmail OAuth bỏ qua thư nhận trước lúc tạo cấu hình. Khôi phục IMAP và fallback khi Gmail history hết hạn chỉ xem thư gần đây, không đọc toàn bộ lịch sử; fallback Gmail hiện lấy một trang kết quả. Nguồn Gmail chưa có polling bù dữ liệu định kỳ độc lập với Pub/Sub.
 - Dashboard polling mỗi năm giây, có thể khiến database hosted tiếp tục hoạt động khi trang đang mở.

@@ -2,7 +2,7 @@
 
 **Turn Vietnamese bank notification emails into signed payment webhooks.**
 
-PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, verifies the bank's DKIM signature, stores transactions, and notifies your application when an incoming transfer contains an order code. Run it on your own server with Docker or deploy it to Cloudflare Workers.
+PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, plus **PayPal** "money received" emails, verifies the bank's DKIM signature, stores transactions, and notifies your application when an incoming transfer contains an order code. Run it on your own server with Docker or deploy it to Cloudflare Workers.
 
 **English** · [Tiếng Việt](README.vi.md)
 
@@ -32,7 +32,7 @@ PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, ve
 ## Features
 
 - **Three email sources:** Gmail IMAP IDLE with an App Password, Gmail OAuth with Pub/Sub notifications, or Gmail forwarding through Cloudflare Email Routing.
-- **Payment matching:** configurable order prefixes, incoming/outgoing transaction records, integer VND amounts, and duplicate detection by email `Message-ID`.
+- **Payment matching:** configurable order prefixes, incoming/outgoing transaction records, integer amounts in minor units with a currency (VND, or the PayPal currency), and duplicate detection by email `Message-ID`.
 - **Signed webhooks:** Standard Webhooks headers, automatic retries, delivery history, test events, manual resend, and secret rotation.
 - **Dashboard:** transaction search and filters, automatic refresh every five seconds while the transaction page is visible, email connection status, and webhook logs. The current UI is in Vietnamese.
 - **Payment tools:** VietQR SVG generation for supported banks, revocable transaction links, and a public incoming-transactions view for cashiers.
@@ -43,6 +43,7 @@ PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, ve
 | --- | --- | --- | --- |
 | CAKE by VPBank | `no-reply@cake.vn` | `cake.vn` | Bank transaction ID; counterparty fields when present |
 | Timo | `support@timo.vn` | `timo.vn` | Balance after the transaction |
+| PayPal (money received only) | `service@intl.paypal.com` | `intl.paypal.com` | PayPal transaction ID; payer name; payer note as description; currency (`USD`…) |
 
 Both parsers extract amount, direction, description, and transaction time. PayMailHook observes notification emails: it does not initiate transfers, hold money, or connect to a bank's payment API. Your application owns order records and decides whether a transfer satisfies an order.
 
@@ -50,7 +51,7 @@ Both parsers extract amount, direction, description, and transaction time. PayMa
 
 ```mermaid
 flowchart TD
-    Bank[CAKE / Timo] --> Gmail[Your Gmail inbox]
+    Bank[CAKE / Timo / PayPal] --> Gmail[Your Gmail inbox]
     Gmail --> IMAP[IMAP IDLE: Bun only]
     Gmail --> OAuth[Gmail API + Pub/Sub]
     Gmail --> Forward[Gmail forwarding + Email Routing]
@@ -296,7 +297,7 @@ An incoming transfer with a matching code and configured webhook URL produces th
 }
 ```
 
-Amounts are integers in VND; timestamps are ISO 8601 UTC. Missing bank-specific fields are `null`. Headers follow [Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp`, and `webhook-signature`.
+Amounts are integers in the minor unit of `currency` (`149000` VND, `209` USD = 2,09 USD); timestamps are ISO 8601 UTC. Missing bank-specific fields are `null`. Headers follow [Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp`, and `webhook-signature`.
 
 Your receiver should:
 
@@ -440,7 +441,7 @@ docs/                 API, design, research, implementation history
 
 ## Current limitations
 
-- Only CAKE and Timo templates are implemented. Bank template or sender changes may require parser updates.
+- Only CAKE, Timo and the Vietnamese PayPal "money received" templates are implemented; other PayPal mail (purchases, authorizations, notices) is ignored. Bank template or sender changes may require parser updates.
 - Detection depends on bank email delivery and intake services. There is no guaranteed detection latency or direct bank reconciliation.
 - IMAP and Gmail OAuth skip messages received before config creation. IMAP recovery and expired-Gmail-history fallback inspect recent mail, not unlimited history; the Gmail fallback currently fetches one page. Gmail intake has no periodic catch-up poll independent of Pub/Sub.
 - Dashboard updates use five-second polling, which can keep a hosted database active while the page is open.
