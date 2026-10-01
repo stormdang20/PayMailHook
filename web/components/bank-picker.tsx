@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 /** Banks PayMailHook reads; adding one here adds it to every picker. */
-export const BANK_NAMES = { CAKE: 'CAKE by VPBank', TIMO: 'Timo' } as const;
+export const BANK_NAMES = { CAKE: 'CAKE by VPBank', TIMO: 'Timo', PAYPAL: 'PayPal' } as const;
 export type BankCode = keyof typeof BANK_NAMES;
 
 const ALL_BANKS = Object.keys(BANK_NAMES) as BankCode[];

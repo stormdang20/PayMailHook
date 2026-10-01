@@ -16,7 +16,7 @@ function assertNoPii(html: string, file: string) {
   }
 }
 
-for (const bank of ['cake', 'timo']) {
+for (const bank of ['cake', 'timo', 'paypal']) {
   await mkdir(`test/fixtures/${bank}`, { recursive: true });
   const files = (await readdir(`mail-template/${bank}`)).filter((f) => f.endsWith('.eml')).sort();
   for (const [i, file] of files.entries()) {

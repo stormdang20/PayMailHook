@@ -31,15 +31,6 @@ async function reject(
   return { status: 'rejected', reason } as const;
 }
 
-function parseBody(parse: Bank['parse'], html: string) {
-  try {
-    return parse(htmlToLines(html));
-  } catch (e) {
-    if (e instanceof ParseError) return null;
-    throw e;
-  }
-}
-
 /** Drizzle wraps driver errors; both postgres.js and PGlite expose the SQLSTATE as `code`. */
 const isUniqueViolation = (e: unknown) =>
   e instanceof DrizzleQueryError && (e.cause as { code?: string } | undefined)?.code === '23505';
@@ -62,6 +53,7 @@ async function store(deps: Deps, config: EmailConfig, { bank, messageId, txn, or
         bank: bank.code,
         direction: txn.direction,
         amount: txn.amount,
+        currency: txn.currency,
         balanceAfter: txn.balanceAfter,
         bankTxnId: txn.bankTxnId,
         description: txn.description,
@@ -101,8 +93,14 @@ export async function ingestRawEmail(
     return reject(deps, config, raw, 'to_mismatch', messageId);
   }
   if (!(await verifyBankDkim(raw, bank, deps.resolveTxt))) return reject(deps, config, raw, 'dkim_failed', messageId);
-  const txn = parseBody(bank.parse, email.html ?? '');
-  if (!txn) return reject(deps, config, raw, 'parse_failed', messageId);
+  let txn: ParsedTxn | null;
+  try {
+    txn = bank.parse(htmlToLines(email.html ?? ''), email.date ? new Date(email.date) : undefined);
+  } catch (e) {
+    if (!(e instanceof ParseError)) throw e;
+    return reject(deps, config, raw, 'parse_failed', messageId);
+  }
+  if (!txn) return { status: 'ignored' }; // the sender's other mail, e.g. a PayPal receipt for a purchase
   try {
     const orderId = txn.direction === 'in' ? extractOrderId(txn.description, config.orderPrefix) : null;
     const result = await store(deps, config, { bank, messageId, txn, orderId });

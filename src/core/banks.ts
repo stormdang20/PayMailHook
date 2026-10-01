@@ -2,7 +2,10 @@ import { parseVnd, vnTime } from './text';
 
 export type ParsedTxn = {
   direction: 'in' | 'out';
+  /** Minor units of `currency` (VND has none, so đồng; USD cents). */
   amount: number;
+  /** ISO 4217 code; absent means VND. */
+  currency?: string;
   description: string;
   occurredAt: Date;
   bankTxnId?: string;
@@ -56,11 +59,32 @@ export function parseTimo(lines: string[]): ParsedTxn {
   };
 }
 
+/** Only "money received" mail is a transaction; PayPal's receipts, authorizations and notices return null. */
+export function parsePaypal(lines: string[], sentAt?: Date): ParsedTxn | null {
+  const received = lines.map((l) => l.match(/^(.+) đã gửi cho bạn ([\d.,]+) \S+ ([A-Z]{3})\.$/)).find(Boolean);
+  if (!received) return null;
+  const bankTxnId = valueAfter(lines, 'Mã giao dịch');
+  // The body only has a date; the DKIM-signed Date header has the time.
+  if (!bankTxnId || !sentAt || Number.isNaN(sentAt.getTime())) throw new ParseError('paypal: id or date not found');
+  const payer = received[1];
+  const note = lines.indexOf(`Ghi chú từ ${payer}:`);
+  return {
+    direction: 'in',
+    amount: Number(received[2].replace(/\D/g, '')), // PayPal prints the currency's own decimals
+    currency: received[3],
+    description: note >= 0 ? lines.slice(note + 1, lines.indexOf('Mã giao dịch')).join(' ') : '',
+    occurredAt: sentAt,
+    bankTxnId,
+    counterparty: { name: payer },
+  };
+}
+
 export type Bank = {
-  code: 'CAKE' | 'TIMO';
+  code: 'CAKE' | 'TIMO' | 'PAYPAL';
   senders: string[];
   dkimDomain: string;
-  parse: (lines: string[]) => ParsedTxn;
+  /** Null: the sender's mail but not a transaction (ignored, not a parse failure). */
+  parse: (lines: string[], sentAt?: Date) => ParsedTxn | null;
   /** Bank omits Date; Gmail adds one and breaks the signature (research §3). */
   gmailAddsDate?: boolean;
 };
@@ -68,6 +92,7 @@ export type Bank = {
 export const BANKS: Bank[] = [
   { code: 'CAKE', senders: ['no-reply@cake.vn'], dkimDomain: 'cake.vn', parse: parseCake },
   { code: 'TIMO', senders: ['support@timo.vn'], dkimDomain: 'timo.vn', parse: parseTimo, gmailAddsDate: true },
+  { code: 'PAYPAL', senders: ['service@intl.paypal.com'], dkimDomain: 'intl.paypal.com', parse: parsePaypal },
 ];
 
 export const bankForSender = (address?: string) =>

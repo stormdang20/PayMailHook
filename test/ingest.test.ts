@@ -117,3 +117,44 @@ test("a bank this Gmail isn't set up for is ignored", async () => {
   expect(result).toEqual({ status: 'ignored' });
   expect(await db.$count(transactions)).toBe(0);
 });
+
+const paypalNote = (await Bun.file('test/fixtures/paypal/4.html').text()).replace(
+  'Thank you very much',
+  'PMH42 Thank you',
+);
+const paypal = (html: string) =>
+  signedEmail({ from: 'service@intl.paypal.com', to: 'owner@gmail.com', html, domain: 'intl.paypal.com' });
+
+test('PayPal money received is stored in cents with its currency and sent to the webhook', async () => {
+  const config = await seedConfig(db, {
+    banks: ['PAYPAL'],
+    webhookUrl: 'https://shop.example.com/hook',
+    webhookSecretEnc: 'x',
+  });
+  const result = await ingestRawEmail(makeDeps(db).deps, config, await paypal(paypalNote));
+  expect(result.status).toBe('stored');
+  const [txn] = await db.select().from(transactions);
+  expect(txn).toMatchObject({ bank: 'PAYPAL', amount: 209, currency: 'USD', orderId: '42', direction: 'in' });
+  const [delivery] = await db.select().from(webhookDeliveries);
+  expect(delivery.payload).toMatchObject({
+    data: { orderId: '42', transaction: { bank: 'PAYPAL', amount: 209, currency: 'USD' } },
+  });
+});
+
+test('PayPal mail that is not money received is ignored without a failure', async () => {
+  const config = await seedConfig(db, { banks: ['PAYPAL'] });
+  const paid = await Bun.file('test/fixtures/paypal/1.html').text();
+  expect(await ingestRawEmail(makeDeps(db).deps, config, await paypal(paid))).toEqual({ status: 'ignored' });
+  expect(await db.$count(transactions)).toBe(0);
+  expect(await db.$count(inboundFailures)).toBe(0);
+  const [updated] = await db.select().from(emailConfigs);
+  expect(updated.ingestError).toBeNull();
+});
+
+test('bank transfers are stored as VND', async () => {
+  await ingestRawEmail(makeDeps(db).deps, await hookConfig(), await cake());
+  const [delivery] = await db.select().from(webhookDeliveries);
+  expect(delivery.payload).toMatchObject({ data: { transaction: { currency: 'VND' } } });
+  const [txn] = await db.select().from(transactions);
+  expect(txn.currency).toBe('VND');
+});

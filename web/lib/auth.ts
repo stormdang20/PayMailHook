@@ -1,6 +1,7 @@
 import { apiKeyClient } from '@better-auth/api-key/client';
 import { adminClient, usernameClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
+import type { BankCode } from '@/components/bank-picker';
 
 export const authClient = createAuthClient({ plugins: [adminClient(), apiKeyClient(), usernameClient()] });
 
@@ -30,7 +31,7 @@ export const linkGmail = (configId: string) =>
     additionalParams: { prompt: 'consent select_account' },
   });
 
-export type GmailDraft = { banks: ('CAKE' | 'TIMO')[]; webhookUrl: string | null };
+export type GmailDraft = { banks: BankCode[]; webhookUrl: string | null };
 
 export async function addGmail(draft: GmailDraft) {
   const flow = crypto.randomUUID();

@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, ilike, isNotNull, lt, lte, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { transactions } from '../core/db/schema';
+import { bank, transactions } from '../core/db/schema';
 import type { AppEnv } from './app';
 import { keyset, pageQuery } from './pagination';
 import { share, unshare } from './share';
@@ -59,7 +59,7 @@ export const transactionRoutes = new Hono<AppEnv>()
         direction: z.enum(['in', 'out']).optional(),
         // Only transactions whose description carried an order code (the ones that trigger webhooks).
         hasOrder: z.literal('true').optional(),
-        bank: z.enum(['CAKE', 'TIMO']).optional(),
+        bank: z.enum(bank.enumValues).optional(),
         from: day.optional(),
         to: day.optional(),
         q: z.string().trim().min(1).max(100).optional(),

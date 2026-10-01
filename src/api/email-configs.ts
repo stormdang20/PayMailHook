@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { encryptText } from '../core/crypto';
-import { emailConfigs } from '../core/db/schema';
+import { bank, emailConfigs } from '../core/db/schema';
 import type { Deps } from '../core/deps';
 import { newForwardingAddress } from '../core/forwarding';
 import { buildPayload, newWebhookSecret, postWebhook, urlPolicy, validateWebhookUrl } from '../core/webhook';
@@ -41,7 +41,7 @@ const imapPassword = z
   .pipe(z.string().regex(/^[A-Za-z]{16}$/, 'App Password is 16 letters'));
 // Which banks' notifications this Gmail receives; a set of the banks PayMailHook reads.
 const banks = z
-  .array(z.enum(['CAKE', 'TIMO']))
+  .array(z.enum(bank.enumValues))
   .min(1)
   .transform((list) => [...new Set(list)].sort());
 const idParam = validate('param', z.object({ id: z.uuid() }));

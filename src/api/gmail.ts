@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie } from 'hono/cookie';
 import { z } from 'zod';
-import { emailConfigs } from '../core/db/schema';
+import { bank, emailConfigs } from '../core/db/schema';
 import { addGmailAccount, connectGmail, syncGmail } from '../core/gmail-oauth';
 import { urlPolicy, validateWebhookUrl } from '../core/webhook';
 import type { AppEnv } from './app';
@@ -20,7 +20,7 @@ export const gmailRoutes = new Hono<AppEnv>()
         flow: z.uuid(),
         webhookUrl: z.string().max(2048).nullable().optional(),
         banks: z
-          .array(z.enum(['CAKE', 'TIMO']))
+          .array(z.enum(bank.enumValues))
           .min(1)
           .transform((values) => [...new Set(values)].sort())
           .optional(),

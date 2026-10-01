@@ -2,7 +2,7 @@
 // /api/gmail/pubsub, and we read new bank mail through the Gmail REST API with the user's token
 // (stored by better-auth's linkSocial). Plain fetch, so it runs on Workers and Bun alike.
 import { and, eq, isNotNull, lt, sql } from 'drizzle-orm';
-import { BANKS, bankForSender } from './banks';
+import { BANKS, type Bank, bankForSender } from './banks';
 import { encryptText } from './crypto';
 import { account, type EmailConfig, emailConfigs, user } from './db/schema';
 import type { Deps } from './deps';
@@ -82,7 +82,7 @@ export async function addGmailAccount(
   deps: Deps,
   userId: string,
   accountId: string,
-  options: { banks?: ('CAKE' | 'TIMO')[]; webhookUrl?: string | null },
+  options: { banks?: Bank['code'][]; webhookUrl?: string | null },
 ) {
   const [linked] = await deps.db
     .select({ id: account.id })

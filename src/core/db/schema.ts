@@ -21,7 +21,7 @@ const tz = (name: string) => timestamp(name, { withTimezone: true });
 const createdAt = () => tz('created_at').notNull().defaultNow();
 
 export const ingestSource = pgEnum('ingest_source', ['imap', 'gmail_oauth', 'forwarding']);
-export const bank = pgEnum('bank', ['CAKE', 'TIMO']);
+export const bank = pgEnum('bank', ['CAKE', 'TIMO', 'PAYPAL']);
 export const direction = pgEnum('direction', ['in', 'out']);
 export const deliveryStatus = pgEnum('delivery_status', ['pending', 'retrying', 'success', 'failed']);
 export const attemptTrigger = pgEnum('attempt_trigger', ['scheduled', 'manual']);
@@ -75,7 +75,9 @@ export const transactions = pgTable(
     messageId: text('message_id').notNull().unique(),
     bank: bank('bank').notNull(),
     direction: direction('direction').notNull(),
+    /** Minor units of `currency`: đồng for VND, cents for USD. */
     amount: bigint('amount', { mode: 'number' }).notNull(),
+    currency: text('currency').notNull().default('VND'),
     balanceAfter: bigint('balance_after', { mode: 'number' }),
     bankTxnId: text('bank_txn_id'),
     description: text('description').notNull(),

@@ -71,6 +71,13 @@
       "when": 1790586604854,
       "tag": "0009_drop_apps_script",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790841655986,
+      "tag": "0010_paypal",
+      "breakpoints": true
     }
   ]
 }

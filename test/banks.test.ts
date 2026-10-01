@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { bankForSender, extractOrderId, ParseError, parseCake, parseTimo } from '../src/core/banks';
+import { bankForSender, extractOrderId, ParseError, parseCake, parsePaypal, parseTimo } from '../src/core/banks';
 import { htmlToLines, normalizeEmail } from '../src/core/text';
 
 const lines = async (p: string) => htmlToLines(await Bun.file(`test/fixtures/${p}`).text());
@@ -37,8 +37,47 @@ test('extracts order id without swallowing trailing text', () => {
   expect(extractOrderId('no code here', 'PMH')).toBeNull();
 });
 
+const sentAt = new Date('2026-09-28T01:03:31Z');
+
+test('parses PayPal money received, amount in cents, time from the Date header', async () => {
+  const txn = parsePaypal(await lines('paypal/6.html'), sentAt);
+  expect(txn).toEqual({
+    direction: 'in',
+    amount: 100,
+    currency: 'USD',
+    description: '',
+    occurredAt: sentAt,
+    bankTxnId: '1AA00000AA0000005',
+    counterparty: { name: 'dataSpring Singapore PTE. LTD.' },
+  });
+});
+
+test('PayPal payer note becomes the description', async () => {
+  const txn = parsePaypal(await lines('paypal/4.html'), sentAt);
+  expect(txn).toMatchObject({ amount: 209, currency: 'USD', bankTxnId: '1AA00000AA0000006' });
+  expect(txn?.description.startsWith('Thank you very much for being our valued user')).toBe(true);
+});
+
+test('PayPal mail other than money received is not a transaction', async () => {
+  for (const file of ['paypal/1.html', 'paypal/3.html']) expect(parsePaypal(await lines(file), sentAt)).toBeNull();
+  expect(parsePaypal(['Đăng nhập mới vào tài khoản PayPal'], sentAt)).toBeNull();
+});
+
+test('PayPal money received without a usable Date header throws ParseError', async () => {
+  const received = await lines('paypal/6.html');
+  expect(() => parsePaypal(received)).toThrow(ParseError);
+  expect(() => parsePaypal(received, new Date('nope'))).toThrow(ParseError);
+  expect(() =>
+    parsePaypal(
+      received.filter((l) => l !== 'Mã giao dịch'),
+      sentAt,
+    ),
+  ).toThrow(ParseError);
+});
+
 test('maps sender to bank, ignores unknown', () => {
   expect(bankForSender('No-Reply@cake.vn')?.code).toBe('CAKE');
+  expect(bankForSender('service@intl.paypal.com')?.code).toBe('PAYPAL');
   expect(bankForSender('someone@evil.test')).toBeUndefined();
 });
 

@@ -30,7 +30,7 @@ export function buildPayload(t: PayloadInput) {
         bank: t.bank,
         direction: t.direction,
         amount: t.amount,
-        currency: 'VND',
+        currency: t.currency ?? 'VND',
         description: t.description,
         bankTxnId: t.bankTxnId ?? null,
         balanceAfter: t.balanceAfter ?? null,
