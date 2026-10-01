@@ -14,6 +14,7 @@ PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, pl
 ## Contents
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Choose a deployment](#choose-a-deployment)
 - [Quick start with Docker](#quick-start-with-docker)
@@ -27,6 +28,7 @@ PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, pl
 - [Architecture and project layout](#architecture-and-project-layout)
 - [Current limitations](#current-limitations)
 - [Contributing](#contributing)
+- [Support the project](#support-the-project)
 - [Documentation and license](#documentation-and-license)
 
 ## Features
@@ -45,7 +47,18 @@ PayMailHook reads balance-change emails from **CAKE by VPBank** and **Timo**, pl
 | Timo | `support@timo.vn` | `timo.vn` | Balance after the transaction |
 | PayPal (money received only) | `service@intl.paypal.com` | `intl.paypal.com` | PayPal transaction ID; payer name; payer note as description; currency (`USD`…) |
 
-Both parsers extract amount, direction, description, and transaction time. PayMailHook observes notification emails: it does not initiate transfers, hold money, or connect to a bank's payment API. Your application owns order records and decides whether a transfer satisfies an order.
+Every parser extracts amount, direction, description, and transaction time. PayMailHook observes notification emails: it does not initiate transfers, hold money, or connect to a bank's payment API. Your application owns order records and decides whether a transfer satisfies an order.
+
+## Screenshots
+
+Demo data; the dashboard is in Vietnamese.
+
+| | |
+| --- | --- |
+| <img src="docs/images/screenshots/landing.png" alt="Landing page" /> | <img src="docs/images/screenshots/transactions.png" alt="Transactions from CAKE, Timo and PayPal (USD)" /> |
+| Landing page | Transactions from CAKE, Timo and PayPal (USD) |
+| <img src="docs/images/screenshots/deliveries.png" alt="Webhook deliveries with retries" /> | <img src="docs/images/screenshots/qr.png" alt="VietQR generator with the order code prefilled" /> |
+| Webhook deliveries with retries | VietQR generator with the order code prefilled |
 
 ## How it works
 
@@ -459,6 +472,14 @@ Bug reports, documentation, translations, and additional bank templates are welc
 4. Update both READMEs when shared behavior or setup changes. Keep the API reference aligned with endpoint and payload changes.
 
 Do not put real bank emails, account details, credentials, or private webhook URLs in public issues or commits. Local raw fixtures belong in ignored `mail-template/`; committed fixtures live in `test/fixtures/`.
+
+## Support the project
+
+If PayMailHook saves you time, you can buy me a coffee by scanning this VietQR code with any Vietnamese banking app ([open the QR](https://paymailhook.stormdang20.workers.dev/api/qr?bank=timo&acc=9007041226179&des=PMH-donate)):
+
+<a href="https://paymailhook.stormdang20.workers.dev/api/qr?bank=timo&acc=9007041226179&des=PMH-donate"><img src="docs/images/donate-qr.svg" alt="VietQR code to donate to PayMailHook via Timo" width="200" /></a>
+
+Bank **Timo**, account `9007041226179`, description `PMH-donate`. Thank you!
 
 ## Documentation and license
 

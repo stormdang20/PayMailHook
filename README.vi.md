@@ -14,6 +14,7 @@ PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **T
 ## Mục lục
 
 - [Tính năng](#tính-năng)
+- [Ảnh chụp màn hình](#ảnh-chụp-màn-hình)
 - [Cách hoạt động](#cách-hoạt-động)
 - [Chọn cách triển khai](#chọn-cách-triển-khai)
 - [Bắt đầu nhanh với Docker](#bắt-đầu-nhanh-với-docker)
@@ -27,6 +28,7 @@ PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **T
 - [Kiến trúc và cấu trúc thư mục](#kiến-trúc-và-cấu-trúc-thư-mục)
 - [Giới hạn hiện tại](#giới-hạn-hiện-tại)
 - [Đóng góp](#đóng-góp)
+- [Ủng hộ dự án](#ủng-hộ-dự-án)
 - [Tài liệu và giấy phép](#tài-liệu-và-giấy-phép)
 
 ## Tính năng
@@ -45,7 +47,18 @@ PayMailHook đọc email biến động số dư từ **CAKE by VPBank** và **T
 | Timo | `support@timo.vn` | `timo.vn` | Số dư sau giao dịch |
 | PayPal (chỉ email nhận tiền) | `service@intl.paypal.com` | `intl.paypal.com` | Mã giao dịch PayPal; tên người gửi; ghi chú của người gửi làm nội dung; loại tiền (`USD`…) |
 
-Cả hai bộ phân tích đều đọc số tiền, chiều giao dịch, nội dung và thời gian giao dịch. PayMailHook theo dõi email thông báo: hệ thống không thực hiện chuyển tiền, giữ tiền hay kết nối API thanh toán của ngân hàng. Ứng dụng của bạn quản lý đơn hàng và quyết định giao dịch có đáp ứng yêu cầu thanh toán hay không.
+Mọi bộ phân tích đều đọc số tiền, chiều giao dịch, nội dung và thời gian giao dịch. PayMailHook theo dõi email thông báo: hệ thống không thực hiện chuyển tiền, giữ tiền hay kết nối API thanh toán của ngân hàng. Ứng dụng của bạn quản lý đơn hàng và quyết định giao dịch có đáp ứng yêu cầu thanh toán hay không.
+
+## Ảnh chụp màn hình
+
+Dữ liệu demo.
+
+| | |
+| --- | --- |
+| <img src="docs/images/screenshots/landing.png" alt="Trang giới thiệu" /> | <img src="docs/images/screenshots/transactions.png" alt="Giao dịch từ CAKE, Timo và PayPal (USD)" /> |
+| Trang giới thiệu | Giao dịch từ CAKE, Timo và PayPal (USD) |
+| <img src="docs/images/screenshots/deliveries.png" alt="Lịch sử gửi webhook và lần thử lại" /> | <img src="docs/images/screenshots/qr.png" alt="Tạo mã VietQR có sẵn mã đơn" /> |
+| Lịch sử gửi webhook và lần thử lại | Tạo mã VietQR có sẵn mã đơn |
 
 ## Cách hoạt động
 
@@ -459,6 +472,14 @@ Dự án đón nhận báo lỗi, cải thiện tài liệu, bản dịch và m�
 4. Cập nhật cả hai README khi đổi cách cài đặt hoặc hành vi chung. Đồng bộ tài liệu API khi đổi endpoint hoặc payload.
 
 Không đưa email ngân hàng thật, thông tin tài khoản, credential hoặc URL webhook riêng vào issue công khai hay commit. Fixture gốc local đặt trong `mail-template/` đã được ignore; fixture được commit nằm ở `test/fixtures/`.
+
+## Ủng hộ dự án
+
+Nếu PayMailHook giúp ích cho bạn, bạn có thể mời mình ly cà phê bằng cách quét mã VietQR dưới đây với bất kỳ app ngân hàng nào ([mở mã QR](https://paymailhook.stormdang20.workers.dev/api/qr?bank=timo&acc=9007041226179&des=PMH-donate)):
+
+<a href="https://paymailhook.stormdang20.workers.dev/api/qr?bank=timo&acc=9007041226179&des=PMH-donate"><img src="docs/images/donate-qr.svg" alt="Mã VietQR ủng hộ PayMailHook qua Timo" width="200" /></a>
+
+Ngân hàng **Timo**, số tài khoản `9007041226179`, nội dung `PMH-donate`. Cảm ơn bạn!
 
 ## Tài liệu và giấy phép
 
