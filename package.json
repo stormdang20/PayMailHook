@@ -64,5 +64,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "wrangler": "^4.137.0"
+  },
+  "patchedDependencies": {
+    "mailauth@5.0.3": "patches/mailauth@5.0.3.patch"
   }
 }

@@ -1,0 +1,13 @@
+diff --git a/lib/dkim/dkim-verifier.js b/lib/dkim/dkim-verifier.js
+index afec83da955bd05dd858a20ad3c42b094403e782..2650dcacd8f51a0fce2cae2a499488ca36ec7e59 100644
+--- a/lib/dkim/dkim-verifier.js
++++ b/lib/dkim/dkim-verifier.js
+@@ -266,7 +266,7 @@ class DkimVerifier extends MessageParser {
+ 
+                         try {
+                             status.result = crypto.verify(
+-                                signatureHeader.signAlgo === 'rsa' ? signatureHeader.algorithm : null,
++                                signatureHeader.signAlgo === 'rsa' ? signatureHeader.hashAlgo : null,
+                                 signatureHeader.signAlgo === 'rsa' ? canonicalizedHeader : crypto.createHash('sha256').update(canonicalizedHeader).digest(),
+                                 publicKey,
+                                 Buffer.from(signatureHeader.parsed?.b?.value, 'base64')

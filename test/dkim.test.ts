@@ -1,4 +1,5 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
+import nodeCrypto from 'node:crypto';
 import { BANKS } from '../src/core/banks';
 import { verifyBankDkim } from '../src/core/dkim';
 import { insertDate, prependHeader, signedEmail, signedEmailWithH, testResolver } from './email';
@@ -9,6 +10,18 @@ const verify = (raw: Uint8Array, bank = CAKE) => verifyBankDkim(raw, bank, testR
 
 test('passes a valid bank signature', async () => {
   expect(await verify(await signedEmail(base))).toBe(true);
+});
+
+test('uses a portable digest name for RSA verification on Workers', async () => {
+  const raw = await signedEmail(base);
+  const verifier = spyOn(nodeCrypto, 'verify');
+  try {
+    expect(await verify(raw)).toBe(true);
+    expect(verifier).toHaveBeenCalled();
+    for (const [algorithm] of verifier.mock.calls) expect(algorithm).toBe('sha256');
+  } finally {
+    verifier.mockRestore();
+  }
 });
 
 test('rejects signature from another domain', async () => {
