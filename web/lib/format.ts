@@ -1,11 +1,10 @@
-const vnd = new Intl.NumberFormat('vi-VN');
 const dateTime = new Intl.DateTimeFormat('vi-VN', {
   timeZone: 'Asia/Ho_Chi_Minh',
   dateStyle: 'short',
   timeStyle: 'medium',
 });
 
-export const formatVnd = (amount: number) => `${vnd.format(amount)} đ`;
+export { formatMoney } from '../../src/core/text';
 export const formatTime = (iso: string | null) => (iso ? dateTime.format(new Date(iso)) : '—');
 
 export function timeAgo(iso: string | null) {

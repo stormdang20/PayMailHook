@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, parseResponse } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
-import { formatTime, formatVnd } from '@/lib/format';
+import { formatMoney, formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export function TransactionsPage() {
@@ -94,7 +94,7 @@ export function TransactionsPage() {
                     )}
                   >
                     {t.direction === 'in' ? '+' : '−'}
-                    {formatVnd(t.amount)}
+                    {formatMoney(t.amount, t.currency)}
                   </TableCell>
                   <TableCell className="max-w-md truncate" title={t.description}>
                     {t.description}

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, parseResponse } from '@/lib/api';
 import { describe, errorMessage } from '@/lib/errors';
-import { formatTime, formatVnd } from '@/lib/format';
+import { formatMoney, formatTime } from '@/lib/format';
 
 type Status = 'pending' | 'retrying' | 'success' | 'failed';
 const STATUS: Record<Status, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -51,7 +51,7 @@ function DeliveryDetail({ id, onClose }: { id: string | null; onClose: () => voi
           <div className="space-y-4 text-sm">
             <div className="flex items-center gap-3">
               <Badge variant={STATUS[d.status].variant}>{STATUS[d.status].label}</Badge>
-              <span>{formatVnd(d.amount)}</span>
+              <span>{formatMoney(d.amount, d.currency)}</span>
               {finished && (
                 <Button
                   size="sm"
@@ -159,7 +159,7 @@ export function DeliveriesPage() {
                   <TableCell>
                     <OrderCode code={d.orderId} />
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatVnd(d.amount)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatMoney(d.amount, d.currency)}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS[d.status].variant}>{STATUS[d.status].label}</Badge>
                   </TableCell>

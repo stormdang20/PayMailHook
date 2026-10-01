@@ -52,6 +52,7 @@ test('Google intake hides the email field and automatically adds the selected ma
   });
   await page.getByRole('button', { name: 'Ngân hàng' }).click();
   await page.getByRole('menuitemcheckbox', { name: 'CAKE by VPBank' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'PayPal' }).click();
   await page.keyboard.press('Escape');
   await page.getByLabel('URL webhook (không bắt buộc)').fill('https://shop.test/payment');
   await page.getByRole('button', { name: 'Đăng nhập với Google', exact: true }).click();

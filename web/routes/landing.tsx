@@ -11,7 +11,7 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: Mailbox,
     title: 'Không cần API ngân hàng',
-    text: 'Dùng chính email thông báo biến động số dư mà CAKE và Timo đã gửi cho bạn. Không hợp đồng, không phí giao dịch.',
+    text: 'Dùng chính email thông báo biến động số dư mà CAKE, Timo và PayPal đã gửi cho bạn. Không hợp đồng, không phí giao dịch.',
   },
   {
     icon: ShieldCheck,
@@ -43,7 +43,7 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
 const STEPS = [
   {
     title: 'Kết nối Gmail',
-    text: 'Gmail đang nhận email thông báo của CAKE hoặc Timo, và URL webhook của hệ thống bạn.',
+    text: 'Gmail đang nhận email thông báo của CAKE, Timo hoặc PayPal, và URL webhook của hệ thống bạn.',
   },
   {
     title: 'Khách chuyển khoản',
@@ -192,8 +192,8 @@ export function LandingPage() {
               Khách chuyển khoản, đơn hàng tự xác nhận.
             </h1>
             <p className="max-w-xl text-lg text-muted-foreground">
-              PayMailHook đọc email biến động số dư của CAKE và Timo, kiểm tra chữ ký của ngân hàng, rồi báo cho hệ
-              thống của bạn bằng webhook trong vài giây.
+              PayMailHook đọc email biến động số dư của CAKE, Timo và email nhận tiền PayPal, kiểm tra chữ ký của ngân
+              hàng, rồi báo cho hệ thống của bạn bằng webhook trong vài giây.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">

@@ -185,7 +185,7 @@ export function ConfigsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Kết nối"
-        description="Gmail nhận email thông báo của CAKE hoặc Timo, và nơi PayMailHook báo khi có đơn được thanh toán."
+        description="Gmail nhận email thông báo của CAKE, Timo hoặc PayPal, và nơi PayMailHook báo khi có đơn được thanh toán."
       />
       <Card>
         <CardHeader>

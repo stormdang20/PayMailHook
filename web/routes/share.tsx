@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, parseResponse } from '@/lib/api';
-import { formatTime, formatVnd } from '@/lib/format';
+import { formatMoney, formatTime } from '@/lib/format';
 
 const Missing = () => (
   <PublicShell>
@@ -30,7 +30,7 @@ export function SharedTransactionPage() {
           <CardHeader>
             <CardTitle className="text-2xl tabular-nums">
               {t.direction === 'in' ? '+' : '−'}
-              {formatVnd(t.amount)}
+              {formatMoney(t.amount, t.currency)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -84,7 +84,7 @@ export function SharedListPage() {
             <TableRow key={t.id}>
               <TableCell className="whitespace-nowrap">{formatTime(t.occurredAt)}</TableCell>
               <TableCell className="whitespace-nowrap text-right text-green-600 tabular-nums">
-                +{formatVnd(t.amount)}
+                +{formatMoney(t.amount, t.currency)}
               </TableCell>
               <TableCell className="max-w-xs truncate" title={t.description}>
                 {t.description}

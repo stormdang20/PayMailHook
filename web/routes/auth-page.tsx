@@ -186,8 +186,8 @@ function BrandPanel() {
           </div>
         </div>
         <p className="text-primary-foreground/80 text-sm leading-relaxed">
-          PayMailHook đọc email biến động số dư của CAKE và Timo, kiểm tra chữ ký ngân hàng rồi báo cho hệ thống của
-          bạn. Không cần API ngân hàng, không phí giao dịch.
+          PayMailHook đọc email biến động số dư của CAKE, Timo và email nhận tiền PayPal, kiểm tra chữ ký ngân hàng rồi
+          báo cho hệ thống của bạn. Không cần API ngân hàng, không phí giao dịch.
         </p>
       </div>
     </section>

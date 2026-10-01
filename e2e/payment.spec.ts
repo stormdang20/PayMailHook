@@ -42,6 +42,7 @@ test('sign up, add a Gmail, receive a bank email, see the transaction and a deli
   await expect(cardBanks).toHaveText('Tất cả ngân hàng');
   await cardBanks.click();
   await page.getByRole('menuitemcheckbox', { name: 'CAKE by VPBank' }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'PayPal' }).click();
   await page.keyboard.press('Escape');
   await expect(cardBanks).toHaveText('Timo');
   await page.getByRole('button', { name: 'Lưu' }).click();

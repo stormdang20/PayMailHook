@@ -29,3 +29,17 @@ Deviations from `2026-10-01-paypal.md`, with cause and rationale.
 ### 1-e: migration renamed
 
 - **Done:** `drizzle-kit` named it `0010_young_lyja`; renamed to `0010_paypal` (file and `_journal.json` tag) to match `0008_drop_source_default` and `0009_drop_apps_script`.
+
+## Tasks 3–4: API, push and web
+
+### 3-a: one `formatMoney` shared by push and web
+
+- **Plan:** a currency-aware push title (Task 3) and `formatMoney` in `web/lib/format.ts` (Task 4).
+- **Done:** `formatMoney` lives in `src/core/text.ts`; `web/lib/format.ts` re-exports it and `formatVnd` is gone.
+- **Cause:** both sides need the same rule (VND keeps `149.000 đ`, other currencies use `Intl` with their own fraction digits). The web already imports from `src/` (the `AppType` type), and `text.ts` has no dependencies, so one copy is enough.
+
+### 4-a: e2e bank pickers untick PayPal too
+
+- **Done:** `e2e/payment.spec.ts` and `e2e/gmail.spec.ts` untick PayPal next to CAKE so the expected subset stays `Timo`.
+- **Cause:** "all sources" now has three entries; the tests encoded "all minus CAKE = Timo".
+- **Note:** a config created through the API without `banks` still gets the DB default `{CAKE,TIMO}`; the dashboard sends all three. PayPal stays opt-in for API clients. The picker still says "Tất cả ngân hàng" although PayPal is not a bank; left unchanged.
