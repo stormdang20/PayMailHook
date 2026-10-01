@@ -81,7 +81,7 @@ const FAQ = [
   },
   {
     q: 'Dữ liệu của tôi được lưu thế nào?',
-    a: 'Chỉ email từ địa chỉ gửi thông báo của ngân hàng được đọc. PayMailHook lưu các trường của giao dịch (số tiền, thời gian, nội dung, người chuyển), không lưu nguyên văn email. Webhook secret và App Password được mã hoá. Lịch sử webhook tự xoá sau 30 ngày.',
+    a: 'PayMailHook kiểm tra metadata để nhận diện email ngân hàng rồi đọc nội dung các email phù hợp. Hệ thống lưu các trường giao dịch; email xử lý thành công không được lưu nguyên văn. Một số email lỗi được lưu mã hoá và dọn sau 7 ngày. Webhook secret và App Password được mã hoá; lịch sử webhook đã hoàn tất hoặc thất bại được dọn sau 30 ngày.',
   },
   {
     q: 'Nếu hệ thống của tôi lỗi thì webhook có bị mất không?',
@@ -294,12 +294,15 @@ export function LandingPage() {
       <footer className="border-t">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-muted-foreground text-sm">
           <span>© 2026 PayMailHook</span>
-          <nav className="flex gap-5">
+          <nav className="flex flex-wrap gap-5">
             <Link to="/docs" className="hover:text-foreground">
               Tài liệu
             </Link>
             <Link to="/privacy" className="hover:text-foreground">
               Quyền riêng tư
+            </Link>
+            <Link to="/terms" className="hover:text-foreground">
+              Điều khoản sử dụng
             </Link>
             <a href="https://github.com/stormdang20/PayMailHook/issues" className="hover:text-foreground">
               Báo lỗi và góp ý

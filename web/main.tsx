@@ -16,6 +16,7 @@ import { Layout } from './routes/layout';
 import { PrivacyPage } from './routes/privacy';
 import { QrPage } from './routes/qr';
 import { SharedListPage, SharedTransactionPage } from './routes/share';
+import { TermsPage } from './routes/terms';
 import { TransactionsPage } from './routes/transactions';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -34,6 +35,7 @@ const router = createBrowserRouter([
   },
   { path: '/guide', element: <Navigate to="/docs" replace /> },
   { path: '/privacy', Component: PrivacyPage },
+  { path: '/terms', Component: TermsPage },
   { path: '/share/t/:token', Component: SharedTransactionPage },
   { path: '/share/c/:token', Component: SharedListPage },
   {

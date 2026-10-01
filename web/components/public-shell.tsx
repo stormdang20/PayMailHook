@@ -27,6 +27,16 @@ export function PublicShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-10">{children}</main>
+      <footer className="border-t">
+        <nav className="mx-auto flex max-w-3xl flex-wrap gap-5 px-4 py-6 text-muted-foreground text-sm">
+          <Link to="/privacy" className="hover:text-foreground">
+            Quyền riêng tư
+          </Link>
+          <Link to="/terms" className="hover:text-foreground">
+            Điều khoản sử dụng
+          </Link>
+        </nav>
+      </footer>
     </div>
   );
 }
