@@ -1,22 +1,58 @@
 {
-  "name": "paymailhook",
-  "main": "src/worker.ts",
-  "compatibility_date": "2026-09-01",
-  "compatibility_flags": ["nodejs_compat"],
-  // Workers Logs: request logs and CPU time per invocation (needed for the 10 ms free-tier check).
-  "observability": { "enabled": true },
-  // SPA built by `bun run build`; only /api/* reaches the Worker, other paths fall back to index.html.
-  "assets": {
-    "directory": "./dist/client",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp"]
-  },
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<hyperdrive-id>" }],
-  "queues": {
-    "producers": [{ "binding": "QUEUE", "queue": "paymailhook-deliveries" }],
-    "consumers": [{ "queue": "paymailhook-deliveries", "max_batch_size": 10, "max_retries": 10 }]
-  },
-  "triggers": { "crons": ["0 * * * *"] },
-  "vars": { "BETTER_AUTH_URL": "https://paymailhook.<account>.workers.dev", "ALLOW_PRIVATE_WEBHOOKS": "false" },
-  "secrets": { "required": ["ENCRYPTION_KEY", "BETTER_AUTH_SECRET"] }
+	"name": "paymailhook",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-09-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// Workers Logs: request logs and CPU time per invocation (needed for the 10 ms free-tier check).
+	"observability": {
+		"enabled": true
+	},
+	// SPA built by `bun run build`; only /api/* reaches the Worker, other paths fall back to index.html.
+	"assets": {
+		"directory": "./dist/client",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/mcp"
+		]
+	},
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "86947b07943e40c0a9c7cddea7fb557a"
+		}
+	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "QUEUE",
+				"queue": "paymailhook-deliveries"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "paymailhook-deliveries",
+				"max_batch_size": 10,
+				"max_retries": 10
+			}
+		]
+	},
+	"triggers": {
+		"crons": [
+			"0 * * * *"
+		]
+	},
+	"vars": {
+		"BETTER_AUTH_URL": "https://paymailhook.stormdang20.workers.dev",
+		"ALLOW_PRIVATE_WEBHOOKS": "false",
+		"ALLOW_SIGNUP": "true"
+	},
+	"secrets": {
+		"required": [
+			"ENCRYPTION_KEY",
+			"BETTER_AUTH_SECRET"
+		]
+	}
 }
