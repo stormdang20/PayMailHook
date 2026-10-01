@@ -73,7 +73,7 @@ const FAQ = [
   },
   {
     q: 'Hỗ trợ những ngân hàng nào?',
-    a: 'CAKE by VPBank và Timo. Tài khoản ngân hàng cần bật thông báo biến động số dư qua email tới một Gmail.',
+    a: 'CAKE by VPBank, Timo và PayPal (email nhận tiền; mã đơn ghi trong phần ghi chú). Tài khoản cần bật thông báo giao dịch qua email tới một Gmail.',
   },
   {
     q: 'Tôi cần chuẩn bị gì?',
@@ -203,7 +203,7 @@ export function LandingPage() {
                 <Link to="/docs">Xem tài liệu tích hợp</Link>
               </Button>
             </div>
-            <p className="text-muted-foreground text-sm">Đang hỗ trợ CAKE by VPBank và Timo.</p>
+            <p className="text-muted-foreground text-sm">Đang hỗ trợ CAKE by VPBank, Timo và PayPal.</p>
           </div>
           <HeroStory />
         </section>
